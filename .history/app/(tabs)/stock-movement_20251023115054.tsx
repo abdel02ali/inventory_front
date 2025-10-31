@@ -1,37 +1,43 @@
-// app/stock-movement.tsx (updated to use ProductSelectionModal)
+// app/stock-movement.tsx
 import ProductSelectionModal from '@/components/ProductSelectionModal';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  useColorScheme,
+  View,
 } from 'react-native';
 import { departmentService } from '../../services/departmentService';
-import { stockMovementService } from '../../services/stockMovmentService';
+import {
+  MovementType,
+  StockMovementData,
+  Department as StockMovementDepartment,
+  stockMovementService,
+  ProductSelection as StockProductSelection
+} from '../../services/stockMovmentService';
 import { useAppContext } from '../context/appContext';
-import { Department } from '../types/department';
+import { Department as ApiDepartment } from '../types/department';
 
-type MovementType = 'stock_in' | 'distribution';
-
+// Use the exact types from stockMovementService
 type ProductSelection = {
   productId: string;
   productName: string;
-  quantity: string;
+  quantity: string; // string for input, will convert to number on submit
   unit: string;
+  unitPrice?: number;
 };
 
 export default function StockMovementScreen() {
@@ -41,28 +47,29 @@ export default function StockMovementScreen() {
   const { products, refreshProducts } = useAppContext();
   
   const [movementType, setMovementType] = useState<MovementType>('stock_in');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedDepartment, setSelectedDepartment] = useState<{
+    id: StockMovementDepartment;
+    name: string;
+  } | null>(null);
   const [supplier, setSupplier] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<ProductSelection[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Updated modal states for ProductSelectionModal
+  // Modal states for ProductSelectionModal
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null);
   const [departmentDropdownVisible, setDepartmentDropdownVisible] = useState(false);
   
-  // Remove the old search state since it's handled in the modal
-  // const [productSearch, setProductSearch] = useState('');
-
   // Departments state
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departments, setDepartments] = useState<ApiDepartment[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
 
   const styles = getStyles(isDarkMode);
 
-  // Available products from context (for display in the form, not for the modal)
+  // Available products from context
   const availableProducts = products || [];
+  
 
   // Load departments from backend
   useEffect(() => {
@@ -74,7 +81,10 @@ export default function StockMovementScreen() {
         
         // Set default department if available
         if (depts.length > 0) {
-          setSelectedDepartment(depts[0].id);
+          setSelectedDepartment({
+            id: depts[0].id as StockMovementDepartment,
+            name: depts[0].name
+          });
         }
       } catch (error) {
         console.error('Error loading departments:', error);
@@ -87,13 +97,14 @@ export default function StockMovementScreen() {
     loadDepartments();
   }, []);
 
-  // Helper function to get actual stock (handles both q and quantity fields)
-  const getProductStock = (product: any) => {
-    return product.quantity !== undefined ? product.quantity : product.q;
-  };
-
+  // Helper function to get actual stock
+const getProductStock = (product: any) => {
+  return product.quantity || 0; // Remove the = sign
+};
   // Get selected department info
-  const selectedDeptInfo = departments.find(dept => dept.id === selectedDepartment);
+  const selectedDeptInfo = departments.find(dept => 
+    selectedDepartment && dept.id === selectedDepartment.id
+  );
 
   const addProduct = () => {
     setSelectedProducts([
@@ -134,7 +145,7 @@ export default function StockMovementScreen() {
     setSelectedProducts(updated);
   };
 
-  // Updated product dropdown functions for ProductSelectionModal
+  // Product selection functions for ProductSelectionModal
   const openProductDropdown = (index: number) => {
     console.log("📦 Opening product dropdown for index:", index);
     setActiveProductIndex(index);
@@ -161,19 +172,18 @@ export default function StockMovementScreen() {
     setDepartmentDropdownVisible(true);
   };
 
-  const selectDepartment = (departmentId: string) => {
-    setSelectedDepartment(departmentId);
+  const selectDepartment = (department: ApiDepartment) => {
+    setSelectedDepartment({
+      id: department.id as StockMovementDepartment,
+      name: department.name
+    });
     setDepartmentDropdownVisible(false);
   };
 
   // Add new product navigation
-
-    const handleAddProduct = () => {
-  // Navigate to product creation screen or show product creation modal
-  router.push('/details/add-product');
-  // or
-  // setShowProductCreationModal(true);
-};
+  const handleAddProduct = () => {
+    router.push('/details/add-product');
+  };
 
   // Get selected product IDs for the modal
   const selectedProductIds = selectedProducts.map(p => p.productId).filter(Boolean);
@@ -211,30 +221,38 @@ export default function StockMovementScreen() {
     setIsSubmitting(true);
 
     try {
-      // Get the full department object for the selected department
-      const departmentObj = departments.find(dept => dept.id === selectedDepartment);
+      // Convert selected products to the exact type expected by the service
+      const productsData: StockProductSelection[] = selectedProducts.map(product => ({
+        productId: product.productId,
+        productName: product.productName,
+        quantity: parseInt(product.quantity),
+        unit: product.unit
+      }));
 
-      const movementData = {
+      // Create the exact data structure expected by the service
+      const movementData: StockMovementData = {
         type: movementType,
-        department: movementType === 'distribution' ? departmentObj : undefined,
-        supplier: movementType === 'stock_in' ? supplier.trim() : undefined,
         stockManager: 'Ahmed',
-        notes: notes.trim() || undefined,
-        products: selectedProducts.map(product => ({
-          productId: product.productId,
-          productName: product.productName,
-          quantity: parseInt(product.quantity),
-          unit: product.unit
-        }))
+        products: productsData,
+        ...(movementType === 'distribution' && selectedDepartment && {
+          department: {
+            id: selectedDepartment.id,
+            name: selectedDepartment.name
+          }
+        }),
+        ...(movementType === 'stock_in' && {
+          supplier: supplier.trim()
+        }),
+        ...(notes.trim() && {
+          notes: notes.trim()
+        })
       };
 
       console.log('📦 Submitting movement data:', movementData);
 
-      // Use type assertion if needed
-      const result = await stockMovementService.createMovement(movementData as any);
+      const result = await stockMovementService.createMovement(movementData);
 
       if (result.success) {
-        // 🔄 CRITICAL: Refresh products to get updated quantities
         console.log('🔄 Refreshing products after movement creation...');
         await refreshProducts();
         
@@ -249,9 +267,13 @@ export default function StockMovementScreen() {
                 setSupplier('');
                 setNotes('');
                 setMovementType('stock_in');
-                // Reset to first department if available
                 if (departments.length > 0) {
-                  setSelectedDepartment(departments[0].id);
+                  setSelectedDepartment({
+                    id: departments[0].id as StockMovementDepartment,
+                    name: departments[0].name
+                  });
+                } else {
+                  setSelectedDepartment(null);
                 }
                 router.back();
               }
@@ -276,7 +298,7 @@ export default function StockMovementScreen() {
     }
   };
 
-  // Department Dropdown Modal (keep this one as it's simple)
+  // Department Dropdown Modal
   const DepartmentDropdownModal = () => (
     <Modal
       visible={departmentDropdownVisible}
@@ -323,15 +345,15 @@ export default function StockMovementScreen() {
                 <TouchableOpacity
                   style={[
                     styles.departmentDropdownItem,
-                    selectedDepartment === item.id && styles.departmentDropdownItemActive
+                    selectedDepartment?.id === item.id && styles.departmentDropdownItemActive
                   ]}
-                  onPress={() => selectDepartment(item.id)}
+                  onPress={() => selectDepartment(item)}
                 >
                   <Text style={styles.departmentIcon}>{item.icon}</Text>
                   <View style={styles.departmentInfo}>
                     <Text style={[
                       styles.departmentDropdownText,
-                      selectedDepartment === item.id && styles.departmentDropdownTextActive
+                      selectedDepartment?.id === item.id && styles.departmentDropdownTextActive
                     ]}>
                       {item.name}
                     </Text>
@@ -341,7 +363,7 @@ export default function StockMovementScreen() {
                       </Text>
                     )}
                   </View>
-                  {selectedDepartment === item.id && (
+                  {selectedDepartment?.id === item.id && (
                     <Ionicons name="checkmark" size={20} color="#10b981" />
                   )}
                 </TouchableOpacity>
@@ -358,7 +380,12 @@ export default function StockMovementScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-  
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          style={styles.container} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -367,12 +394,6 @@ export default function StockMovementScreen() {
             <Text style={styles.headerTitle}>Add Stock Movement</Text>
             <Text style={styles.headerSubtitle}>Manage inventory movements</Text>
           </View>
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView 
-          style={styles.container} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
 
           <View style={styles.content}>
             {/* Movement Type Selection */}
@@ -439,18 +460,20 @@ export default function StockMovementScreen() {
                     onPress={openDepartmentDropdown}
                   >
                     <View style={styles.departmentTriggerContent}>
-                      {selectedDeptInfo && (
+                      {selectedDepartment ? (
                         <>
-                          <Text style={styles.departmentIcon}>{selectedDeptInfo.icon}</Text>
+                          <Text style={styles.departmentIcon}>
+                            {selectedDeptInfo?.icon || '🏢'}
+                          </Text>
                           <View style={styles.departmentTriggerInfo}>
-                            <Text style={styles.departmentTriggerLabel}>{selectedDeptInfo.name}</Text>
-                            {selectedDeptInfo.description && (
-                              <Text style={styles.departmentTriggerDescription}>
-                                {selectedDeptInfo.description}
-                              </Text>
-                            )}
+                            <Text style={styles.departmentTriggerLabel}>{selectedDepartment.name}</Text>
+                            <Text style={styles.departmentTriggerDescription}>
+                              Department ID: {selectedDepartment.id}
+                            </Text>
                           </View>
                         </>
+                      ) : (
+                        <Text style={styles.dropdownPlaceholder}>Select a department</Text>
                       )}
                     </View>
                     <Ionicons name="chevron-down" size={20} color={isDarkMode ? "#94a3b8" : "#64748b"} />
@@ -473,7 +496,7 @@ export default function StockMovementScreen() {
               </View>
             )}
 
-            {/* Products Section Header */}
+            {/* Products Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View>
@@ -520,15 +543,15 @@ export default function StockMovementScreen() {
                       <View style={[styles.inputGroup, styles.quantityInput]}>
                         <Text style={styles.inputLabel}>
                           Quantity * {product.productId && (
-                            <Text style={styles.currentStockInfo}>
-                              (Current: {
-                                (() => {
-                                  const foundProduct = availableProducts.find(p => p.id === product.productId);
-                                  return foundProduct ? getProductStock(foundProduct) : 0;
-                                })()
-                              })
-                            </Text>
-                          )}
+  <Text style={styles.currentStockInfo}>
+    (Current: {
+      (() => {
+        const foundProduct = availableProducts.find(p => p.id === product.productId);
+        return foundProduct ? getProductStock(foundProduct) : 0;
+      })()
+    })
+  </Text>
+)}
                         </Text>
                         <TextInput
                           style={styles.textInput}
@@ -612,7 +635,7 @@ export default function StockMovementScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Use the new ProductSelectionModal instead of the old ProductDropdownModal */}
+          {/* Product Selection Modal */}
           <ProductSelectionModal
             visible={productModalVisible}
             onClose={() => {
@@ -625,7 +648,7 @@ export default function StockMovementScreen() {
             selectedProductIds={selectedProductIds}
           />
 
-          {/* Keep Department Dropdown Modal */}
+          {/* Department Dropdown Modal */}
           <DepartmentDropdownModal />
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -633,7 +656,6 @@ export default function StockMovementScreen() {
   );
 }
 
-// Keep your existing getStyles function (no changes needed)
 const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
@@ -641,10 +663,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-    width: '100%',
   },
   header: {
     padding: 20,
@@ -735,7 +753,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: isDarkMode ? "#94a3b8" : "#64748b",
     textAlign: 'center',
   },
-  // Department Loading States
   departmentLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -764,7 +781,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  // Department Dropdown
   departmentDropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,7 +809,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: isDarkMode ? "#f1f5f9" : "#1e293b",
   },
   departmentTriggerDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: isDarkMode ? "#94a3b8" : "#64748b",
     marginTop: 2,
   },
@@ -810,7 +826,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  // Products Section
   productCard: {
     backgroundColor: isDarkMode ? "#334155" : "#f8fafc",
     padding: 16,
@@ -860,7 +875,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: '#6b7280',
     fontStyle: 'italic',
   },
-  // Dropdown Styles
   dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -879,7 +893,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   dropdownPlaceholder: {
     color: isDarkMode ? "#94a3b8" : "#9ca3af",
   },
-  // Unit Display
   unitDisplay: {
     backgroundColor: isDarkMode ? "#475569" : "#e2e8f0",
     borderWidth: 1,
@@ -894,7 +907,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  // Add Product Button
   addProductButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -913,14 +925,13 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: '#6366f1',
     marginLeft: 8,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "transparent",
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    marginTop:120
+    marginTop: 120
   },
   dropdownContainer: {
     backgroundColor: isDarkMode ? "#1e293b" : "#ffffff",
@@ -946,62 +957,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontWeight: 'bold',
     color: isDarkMode ? "#f1f5f9" : "#1e293b",
   },
-  // Search Styles
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: isDarkMode ? "#334155" : "#e2e8f0",
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 12,
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    fontSize: 16,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: isDarkMode ? "#334155" : "#f1f5f9",
-  },
-  dropdownItemSelected: {
-    backgroundColor: isDarkMode ? "#374151" : "#f1f5f9",
-  },
-  productInfo: {
-    flex: 1,
-  },
-  dropdownItemText: {
-    fontSize: 16,
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  dropdownItemTextSelected: {
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-  },
-  productUnit: {
-    fontSize: 14,
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-  },
-  lowStockWarning: {
-    color: '#ef4444',
-    fontWeight: 'bold',
-  },
-  emptyDropdown: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyDropdownText: {
-    textAlign: 'center',
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  // Loading States
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -1027,35 +982,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  // Add New Product Button
-  addNewProductFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: isDarkMode ? "#334155" : "#e2e8f0",
-    backgroundColor: isDarkMode ? "#1e293b" : "#f8fafc",
-  },
-  addNewProductButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderBottomEndRadius:15
-  },
-  addNewProductButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  addNewProductText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10b981',
-    marginLeft: 8,
-  },
-  // Department Dropdown Items
   departmentDropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1100,7 +1026,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  // Create Department Button
   createDepartmentButton: {
     backgroundColor: '#6366f1',
     paddingHorizontal: 16,

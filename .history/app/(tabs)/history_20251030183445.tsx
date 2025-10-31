@@ -1,19 +1,20 @@
-
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    ScrollView,
-    SectionList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View
 } from 'react-native';
 import { useStockMovements } from '../../hooks/useStockMovements';
 import { departmentService } from '../../services/departmentService';
@@ -48,6 +49,23 @@ interface DepartmentConfig {
   activeColor: string;
 }
 
+// Custom debounce hook
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 export default function HistoryScreen() {
   const colorScheme = useColorScheme();
   const isDarkMode = colorScheme === 'dark';
@@ -55,15 +73,26 @@ export default function HistoryScreen() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<MovementType | 'all'>('all');
-  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<DepartmentFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [departments, setDepartments] = useState<DepartmentConfig[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [initialLoad, setInitialLoad] = useState(true);
+  
+  // Date picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [tempStartDate, setTempStartDate] = useState<Date>(new Date());
+  const [tempEndDate, setTempEndDate] = useState<Date>(new Date());
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const styles = getStyles(isDarkMode);
 
-  // Default department configuration as fallback - using StockMovementDepartment type
+  // Default department configuration as fallback
   const defaultDepartments: DepartmentConfig[] = [
     { key: 'all', label: 'All', icon: '🏢', color: '#6b7280', activeColor: '#6366f1' },
     { key: 'pastry', label: 'Pastry', icon: '🥐', color: '#f59e0b', activeColor: '#d97706' },
@@ -72,183 +101,255 @@ export default function HistoryScreen() {
     { key: 'magazin', label: 'Office', icon: '👔', color: '#8b5cf6', activeColor: '#7c3aed' },
   ];
 
-  // Fetch departments from server and map to StockMovementDepartment
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        setLoadingDepartments(true);
-        const serverDepartments = await departmentService.getDepartments();
-        
-        console.log('Server departments:', serverDepartments); // Debug log
-        
-        // Transform server departments to match our UI format using StockMovementDepartment
-        const transformedDepartments: DepartmentConfig[] = [
-          { key: 'all', label: 'All', icon: '🏢', color: '#6b7280', activeColor: '#6366f1' },
-        ];
+  // Fetch departments - SIMPLIFIED VERSION
+  const fetchDepartments = async () => {
+    try {
+      setLoadingDepartments(true);
+      const serverDepartments = await departmentService.getDepartments();
+      
+      console.log('📊 Server departments:', serverDepartments);
+      
+      // Transform server departments to match our UI format
+      const transformedDepartments: DepartmentConfig[] = [
+        { key: 'all', label: 'All', icon: '🏢', color: '#6b7280', activeColor: '#6366f1' },
+      ];
 
-        // Server returns array of Department objects with id, name, icon, color, etc.
-        if (Array.isArray(serverDepartments)) {
-          serverDepartments.forEach((dept: ApiDepartment) => {
-            if (dept && dept.id) {
-              // Map the API department ID to a StockMovementDepartment
-              // This assumes your API department IDs match the StockMovementDepartment values
-              const departmentKey = dept.id as StockMovementDepartment;
-              
-              transformedDepartments.push({
-                key: departmentKey,
-                label: dept.name || 'Unknown',
-                icon: dept.icon || '🏢',
-                color: dept.color || '#6366f1',
-                activeColor: dept.activeColor || dept.color || '#6366f1',
-              });
-            }
-          });
-        }
-        
-        // Use transformed departments if we have any, otherwise use defaults
-        setDepartments(transformedDepartments.length > 1 ? transformedDepartments : defaultDepartments);
-      } catch (error) {
-        console.error('Failed to fetch departments:', error);
-        // Fallback to default departments if server fetch fails
-        setDepartments(defaultDepartments);
-      } finally {
-        setLoadingDepartments(false);
+      if (Array.isArray(serverDepartments)) {
+        serverDepartments.forEach((dept: ApiDepartment) => {
+          if (dept && dept.id) {
+            const departmentKey = dept.id as StockMovementDepartment;
+            
+            transformedDepartments.push({
+              key: departmentKey,
+              label: dept.name || 'Unknown',
+              icon: dept.icon || '🏢',
+              color: dept.color || '#6366f1',
+              activeColor: dept.activeColor || dept.color || '#6366f1',
+            });
+          }
+        });
       }
-    };
+      
+      setDepartments(transformedDepartments.length > 1 ? transformedDepartments : defaultDepartments);
+    } catch (error) {
+      console.error('❌ Failed to fetch departments:', error);
+      setDepartments(defaultDepartments);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
 
+  // Fetch departments on component mount
+  useEffect(() => {
     fetchDepartments();
   }, []);
 
-  // Helper function to extract department ID from movement - IMPROVED VERSION
+  // Refresh departments function
+  const refreshDepartments = async () => {
+    await fetchDepartments();
+  };
+
+  // Helper function to extract department ID from movement
   const getDepartmentIdFromMovement = (movement: StockMovement): string => {
     if (!movement.department) return '';
     
-    console.log('Movement department raw:', movement.department); // Debug log
-    
-    // If department is a string, return it directly
     if (typeof movement.department === 'string') {
       return movement.department;
     }
     
-    // If department is an object with an id property, return the id
     if (typeof movement.department === 'object' && movement.department !== null && 'id' in movement.department) {
       return (movement.department as any).id;
     }
     
-    // If department is an object with a name property, try to find matching department by name
     if (typeof movement.department === 'object' && movement.department !== null && 'name' in movement.department) {
       const deptName = (movement.department as any).name;
-      // Try to find a department with matching name
-      const foundDept = departments.find(d => d.label.toLowerCase() === deptName.toLowerCase());
+      const foundDept = departments.find(d => 
+        d.label.toLowerCase() === deptName.toLowerCase() ||
+        d.key.toLowerCase() === deptName.toLowerCase()
+      );
       if (foundDept) {
         return foundDept.key;
       }
-      return deptName; // Return name as fallback
+      return deptName;
     }
     
-    // Fallback: stringify the object for debugging
-    console.warn('Unknown department format:', movement.department);
     return JSON.stringify(movement.department);
   };
 
-  // Update hook to use current filters - using the correct Department type
+  // Update hook to use current filters
   const { 
     movements, 
     loading, 
     error, 
-    pagination, 
-    fetchMovements,
     refetch 
   } = useStockMovements({
     type: selectedType !== 'all' ? selectedType : undefined,
     department: selectedDepartment !== 'all' ? selectedDepartment as StockMovementDepartment : undefined,
     page: 1,
-    limit: 50
+    limit: 30
   });
 
-  // Refetch data when filters change
-  useEffect(() => {
-    console.log('Refetching with filters:', {
-      type: selectedType,
-      department: selectedDepartment
-    });
-    refetch();
-  }, [selectedType, selectedDepartment]);
-
-  // Show error alert if there's an error
-  useEffect(() => {
-    if (error) {
-      Alert.alert('Error', error);
-    }
-  }, [error]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
+  // Enhanced refresh function that updates lastUpdated timestamp
+  const enhancedRefetch = async () => {
     try {
       await refetch();
-    } catch (err) {
-      console.error('Refresh error:', err);
+      setLastUpdated(new Date()); // Update last updated timestamp
+    } catch (error) {
+      console.error('Refetch error:', error);
+      throw error;
+    }
+  };
+
+  // Auto-refresh when filters change (but not on initial load)
+  useEffect(() => {
+    if (!initialLoad && !loading) {
+      const timeoutId = setTimeout(() => {
+        enhancedRefetch();
+      }, 300); // Small delay to avoid too many rapid requests
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedType, selectedDepartment]);
+
+  // Mark initial load as complete once data is loaded
+  useEffect(() => {
+    if (!loading && !loadingDepartments) {
+      setInitialLoad(false);
+    }
+  }, [loading, loadingDepartments]);
+
+  // Refresh function for both movements and departments
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        enhancedRefetch(),
+        refreshDepartments()
+      ]);
+    } catch (error) {
+      console.error('Refresh error:', error);
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Filter movements locally based on search and period only
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    await handleRefresh();
+  };
+
+  // Date picker functions
+  const handleCustomDateSelect = () => {
+    // Initialize with current dates or existing selected dates
+    setTempStartDate(startDate || new Date());
+    setTempEndDate(endDate || new Date());
+    setDatePickerMode('start');
+    setShowDatePicker(true);
+  };
+
+  const handleStartDateSelect = () => {
+    setDatePickerMode('start');
+  };
+
+  const handleEndDateSelect = () => {
+    setDatePickerMode('end');
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (selectedDate) {
+      if (datePickerMode === 'start') {
+        setTempStartDate(selectedDate);
+        // Auto-advance to end date selection
+        if (Platform.OS === 'ios') {
+          setDatePickerMode('end');
+        }
+      } else {
+        setTempEndDate(selectedDate);
+      }
+    }
+  };
+
+  const applyDateFilter = () => {
+    setStartDate(tempStartDate);
+    setEndDate(tempEndDate);
+    setSelectedPeriod('custom');
+    setShowDatePicker(false);
+  };
+
+  const clearDateFilter = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setSelectedPeriod('all');
+  };
+
+  // Format date for display
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Format time for last updated
+  const formatLastUpdated = (date: Date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Filter movements locally based on search, period, and date range
   const filteredMovements = movements.filter((movement: StockMovement) => {
     const movementDate = convertFirestoreTimestamp(movement.timestamp);
     
-    // Search filter
-    const matchesSearch = searchQuery === '' || 
+    // Search filter with debounced query - IMPROVED SEARCH
+    const matchesSearch = debouncedSearchQuery === '' || 
       movement.products.some((product: ProductSelection) => 
-        product.productName.toLowerCase().includes(searchQuery.toLowerCase())
+        product.productName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (product.productId && product.productId.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
       ) ||
-      movement.stockManager.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (movement.supplier && movement.supplier.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (movement.department && getDepartmentIdFromMovement(movement).toLowerCase().includes(searchQuery.toLowerCase()));
+      movement.stockManager.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      (movement.supplier && movement.supplier.toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
+      (movement.department && getDepartmentIdFromMovement(movement).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
+      (movement.notes && movement.notes.toLowerCase().includes(debouncedSearchQuery.toLowerCase()));
 
-    // Period filter
+    // Period and Date filter
     const now = new Date();
-    let matchesPeriod = true;
+    let matchesDate = true;
 
     switch (selectedPeriod) {
       case 'today':
-        matchesPeriod = movementDate.toDateString() === now.toDateString();
+        matchesDate = movementDate.toDateString() === now.toDateString();
         break;
       case 'week':
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        matchesPeriod = movementDate >= weekAgo;
+        matchesDate = movementDate >= weekAgo;
         break;
       case 'month':
         const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        matchesPeriod = movementDate >= monthAgo;
+        matchesDate = movementDate >= monthAgo;
+        break;
+      case 'custom':
+        if (startDate && endDate) {
+          // Set time to start and end of day for proper date range comparison
+          const startOfDay = new Date(startDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(endDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          matchesDate = movementDate >= startOfDay && movementDate <= endOfDay;
+        }
         break;
       default:
-        matchesPeriod = true;
+        matchesDate = true;
     }
 
-    return matchesSearch && matchesPeriod;
+    return matchesSearch && matchesDate;
   });
-
-  // Debug: Log department filtering info
-  useEffect(() => {
-    if (selectedDepartment !== 'all' && movements.length > 0) {
-      console.log('Department Filter Debug:');
-      console.log('Selected Department:', selectedDepartment);
-      console.log('Total movements:', movements.length);
-      
-      movements.forEach((movement, index) => {
-        const deptId = getDepartmentIdFromMovement(movement);
-        const matches = deptId === selectedDepartment;
-        console.log(`Movement ${index + 1}:`, {
-          id: movement.id,
-          departmentRaw: movement.department,
-          extractedDeptId: deptId,
-          matches: matches,
-          type: movement.type
-        });
-      });
-    }
-  }, [selectedDepartment, movements]);
 
   // Group by date for section list
   const groupedMovements = filteredMovements.reduce((acc: { [key: string]: StockMovement[] }, movement: StockMovement) => {
@@ -316,18 +417,17 @@ export default function HistoryScreen() {
       return `${dept.icon} ${dept.label}`;
     }
     
-    // Fallback: if we have a department object with name, use that
     if (typeof movement.department === 'object' && movement.department !== null && 'name' in movement.department) {
       return `🏢 ${(movement.department as any).name}`;
     }
     
-    // Final fallback
     return `🏢 ${departmentId}`;
   };
 
-  const renderProductItem = (product: ProductSelection, index: number) => {
+  // Fixed renderProductItem function
+  const renderProductItem = (product: ProductSelection) => {
     return (
-      <View key={`${product.productId}-${index}`} style={styles.productItem}>
+      <View style={styles.productItem}>
         <Text style={styles.productQuantity}>
           {product.quantity} {product.unit}
         </Text>
@@ -341,38 +441,107 @@ export default function HistoryScreen() {
     );
   };
 
-  // Handle filter changes
-  const handleTypeChange = (type: MovementType | 'all') => {
-    setSelectedType(type);
+  // Date Picker Modal
+  const renderDatePickerModal = () => {
+    if (!showDatePicker) return null;
+
+    return (
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.datePickerOverlay}>
+          <View style={styles.datePickerContainer}>
+            <Text style={styles.datePickerTitle}>Select Date Range</Text>
+            
+            {/* Date Selection Buttons */}
+            <View style={styles.dateSelectionContainer}>
+              <TouchableOpacity 
+                style={[
+                  styles.dateSelectionButton,
+                  datePickerMode === 'start' && styles.dateSelectionButtonActive
+                ]}
+                onPress={handleStartDateSelect}
+              >
+                <Text style={[
+                  styles.dateSelectionButtonText,
+                  datePickerMode === 'start' && styles.dateSelectionButtonTextActive
+                ]}>
+                  Start Date
+                </Text>
+                <Text style={styles.dateSelectionDateText}>
+                  {formatDate(tempStartDate)}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.dateSelectionButton,
+                  datePickerMode === 'end' && styles.dateSelectionButtonActive
+                ]}
+                onPress={handleEndDateSelect}
+              >
+                <Text style={[
+                  styles.dateSelectionButtonText,
+                  datePickerMode === 'end' && styles.dateSelectionButtonTextActive
+                ]}>
+                  End Date
+                </Text>
+                <Text style={styles.dateSelectionDateText}>
+                  {formatDate(tempEndDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Date Picker */}
+            <DateTimePicker
+              value={datePickerMode === 'start' ? tempStartDate : tempEndDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onDateChange}
+              style={styles.datePicker}
+              textColor={isDarkMode ? "#ffffff" : "#000000"}
+            />
+
+            {/* Action Buttons */}
+            <View style={styles.datePickerActions}>
+              <TouchableOpacity 
+                style={styles.datePickerCancel}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.datePickerApply}
+                onPress={applyDateFilter}
+                disabled={tempStartDate > tempEndDate}
+              >
+                <Text style={styles.datePickerApplyText}>
+                  Apply Date Range
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {tempStartDate > tempEndDate && (
+              <Text style={styles.dateErrorText}>
+                Start date cannot be after end date
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
-  const handleDepartmentChange = (department: DepartmentFilter) => {
-    console.log('Department filter changed to:', department);
-    setSelectedDepartment(department);
-  };
-
-  const handlePeriodChange = (period: 'today' | 'week' | 'month' | 'all') => {
-    setSelectedPeriod(period);
-  };
-
-  if ((loading && !refreshing) || loadingDepartments) {
+  // Show loading screen only during initial load
+  if (initialLoad) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366f1" />
         <Text style={styles.loadingText}>Loading stock history...</Text>
-      </View>
-    );
-  }
-
-  if (error && !loading) {
-    return (
-      <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle" size={48} color="#ef4444" />
-        <Text style={styles.errorTitle}>Failed to Load History</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -382,16 +551,28 @@ export default function HistoryScreen() {
       {/* Header with Add Button */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>📦 Stock History</Text>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => router.push('/stock-movement')}
-          >
-            <Ionicons name="add-circle" size={20} color="#ffffff" />
-            <Text style={styles.addButtonText}>New Movement</Text>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Stock History</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.refreshHeaderButton}
+              onPress={handleManualRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Ionicons name="refresh" size={20} color="#ffffff" />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => router.push('/details/stock-movement')}
+            >
+              <Ionicons name="add-circle" size={20} color="#ffffff" />
+              <Text style={styles.addButtonText}>New Movement</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={styles.headerSubtitle}>Track all stock movements</Text>
       </View>
 
       {/* Statistics */}
@@ -410,6 +591,24 @@ export default function HistoryScreen() {
         </View>
       </View>
 
+      {/* Refresh Indicator - Only show for subsequent refreshes, not initial load */}
+      {refreshing && (
+        <View style={styles.refreshIndicator}>
+          <ActivityIndicator size="small" color="#6366f1" />
+          <Text style={styles.refreshIndicatorText}>Updating data...</Text>
+        </View>
+      )}
+
+      {/* Last Updated Info */}
+      {!refreshing && (
+        <View style={styles.lastUpdatedContainer}>
+          <Ionicons name="time-outline" size={12} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+          <Text style={styles.lastUpdatedText}>
+            Updated {formatLastUpdated(lastUpdated)}on 
+          </Text>
+        </View>
+      )}
+
       {/* Filters */}
       <View style={styles.filtersContainer}>
         {/* Search */}
@@ -417,7 +616,7 @@ export default function HistoryScreen() {
           <Ionicons name="search" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search products, departments..."
+            placeholder="Search products, managers, suppliers, notes..."
             placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -450,7 +649,7 @@ export default function HistoryScreen() {
                   { backgroundColor: type.key === 'stock_in' ? '#10b981' : type.key === 'distribution' ? '#ef4444' : '#6366f1' }
                 ]
               ]}
-              onPress={() => handleTypeChange(type.key as MovementType | 'all')}
+              onPress={() => setSelectedType(type.key as MovementType | 'all')}
             >
               <Text style={[
                 styles.filterButtonText,
@@ -463,6 +662,20 @@ export default function HistoryScreen() {
         </ScrollView>
 
         {/* Department Filter */}
+        <View style={styles.departmentHeader}>
+          <Text style={styles.filterLabel}>Departments</Text>
+          <TouchableOpacity 
+            onPress={refreshDepartments} 
+            style={styles.refreshSmallButton}
+            disabled={loadingDepartments}
+          >
+            {loadingDepartments ? (
+              <ActivityIndicator size="small" color={isDarkMode ? "#94a3b8" : "#64748b"} />
+            ) : (
+              <Ionicons name="refresh" size={14} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+            )}
+          </TouchableOpacity>
+        </View>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false} 
@@ -479,7 +692,7 @@ export default function HistoryScreen() {
                   { borderLeftColor: dept.activeColor, backgroundColor: isDarkMode ? '#1e293b' : '#f8fafc' }
                 ]
               ]}
-              onPress={() => handleDepartmentChange(dept.key)}
+              onPress={() => setSelectedDepartment(dept.key)}
             >
               <Text style={[
                 styles.departmentButtonText,
@@ -491,7 +704,17 @@ export default function HistoryScreen() {
           ))}
         </ScrollView>
 
-        {/* Period Filter */}
+        {/* Period Filter with Date Range */}
+        <View style={styles.periodHeader}>
+          <Text style={styles.filterLabel}>Time Period</Text>
+          {selectedPeriod === 'custom' && startDate && endDate && (
+            <TouchableOpacity onPress={clearDateFilter} style={styles.clearDateButton}>
+              <Text style={styles.clearDateButtonText}>
+                {formatDate(startDate)} - {formatDate(endDate)} ✕
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false} 
@@ -502,6 +725,7 @@ export default function HistoryScreen() {
             { key: 'today', label: 'Today' },
             { key: 'week', label: 'Week' },
             { key: 'month', label: 'Month' },
+            { key: 'custom', label: 'Custom Date' },
             { key: 'all', label: 'All Time' }
           ].map((period) => (
             <TouchableOpacity
@@ -510,7 +734,15 @@ export default function HistoryScreen() {
                 styles.periodButton,
                 selectedPeriod === period.key && styles.periodButtonActive
               ]}
-              onPress={() => handlePeriodChange(period.key as 'today' | 'week' | 'month' | 'all')}
+              onPress={() => {
+                if (period.key === 'custom') {
+                  handleCustomDateSelect();
+                } else {
+                  setSelectedPeriod(period.key as 'today' | 'week' | 'month' | 'custom' | 'all');
+                  setStartDate(null);
+                  setEndDate(null);
+                }
+              }}
             >
               <Text style={[
                 styles.periodButtonText,
@@ -523,15 +755,8 @@ export default function HistoryScreen() {
         </ScrollView>
       </View>
 
-      {/* Debug Info */}
-      {selectedDepartment !== 'all' && (
-        <View style={styles.debugContainer}>
-          <Text style={styles.debugText}>
-            Filtering by: {departments.find(d => d.key === selectedDepartment)?.label} 
-            ({movements.length} movements loaded, {filteredMovements.length} after search/period filter)
-          </Text>
-        </View>
-      )}
+      {/* Date Picker Modal */}
+      {renderDatePickerModal()}
 
       {/* History List */}
       {filteredMovements.length === 0 ? (
@@ -540,15 +765,13 @@ export default function HistoryScreen() {
           <Text style={styles.emptyStateTitle}>No movements found</Text>
           <Text style={styles.emptyStateText}>
             {searchQuery || selectedType !== 'all' || selectedPeriod !== 'all' || selectedDepartment !== 'all'
-              ? 'Try adjusting your filters'
+              ? 'Try adjusting your filters or search query'
               : 'No stock movements recorded yet'
             }
           </Text>
-          {(selectedDepartment !== 'all') && (
-            <Text style={styles.debugHint}>
-              Debug: Selected department: {selectedDepartment}
-            </Text>
-          )}
+          <TouchableOpacity style={styles.emptyStateButton} onPress={handleManualRefresh}>
+            <Text style={styles.emptyStateButtonText}>Refresh Data</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <SectionList
@@ -560,7 +783,7 @@ export default function HistoryScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={handleRefresh}
               colors={['#6366f1']}
               tintColor={isDarkMode ? "#6366f1" : "#6366f1"}
             />
@@ -606,7 +829,11 @@ export default function HistoryScreen() {
 
               {/* Products List */}
               <View style={styles.productsList}>
-                {item.products.map((product, index) => renderProductItem(product, index))}
+                {item.products.map((product, index) => (
+                  <View key={`${product.productId}-${index}`}>
+                    {renderProductItem(product)}
+                  </View>
+                ))}
               </View>
 
               {/* Total Value for Stock In */}
@@ -625,7 +852,6 @@ export default function HistoryScreen() {
                 </View>
               )}
 
-              {/* Optional: Add a visual indicator that this is clickable */}
               <View style={styles.clickIndicator}>
                 <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
               </View>
@@ -642,10 +868,12 @@ export default function HistoryScreen() {
   );
 }
 
+// ... keep the same getStyles function as before ...
+
 const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDarkMode ? "#0f172a" : "#f8fafc",
+    backgroundColor: isDarkMode ? "#121212" : "#f8fafc",
   },
   loadingContainer: {
     flex: 1,
@@ -658,41 +886,10 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontSize: 16,
     color: isDarkMode ? "#94a3b8" : "#64748b",
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: isDarkMode ? "#0f172a" : "#f8fafc",
-    padding: 20,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   header: {
     padding: 20,
     paddingTop: 60,
-    paddingBottom: 16,
+    paddingBottom: 20,
     backgroundColor: '#6366f1',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -701,17 +898,24 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#e0e7ff',
-    opacity: 0.9,
+  // Add the missing refreshHeaderButton style
+  refreshHeaderButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   addButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -732,7 +936,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     padding: 16,
-    marginTop: -32,
+    marginTop: -30,
   },
   statCard: {
     flex: 1,
@@ -758,9 +962,74 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: isDarkMode ? "#94a3b8" : "#64748b",
     fontWeight: '600',
   },
+  // Refresh Indicator Styles
+  refreshIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDarkMode ? "#1e293b" : "#ffffff",
+    padding: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#334155" : "#e2e8f0",
+  },
+  refreshIndicatorText: {
+    fontSize: 12,
+    color: isDarkMode ? "#94a3b8" : "#64748b",
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  lastUpdatedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  lastUpdatedText: {
+    fontSize: 11,
+    color: isDarkMode ? "#94a3b8" : "#64748b",
+    marginLeft: 4,
+  },
   filtersContainer: {
     padding: 16,
     gap: 8,
+  },
+  departmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  periodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: isDarkMode ? "#f1f5f9" : "#1e293b",
+  },
+  refreshSmallButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: isDarkMode ? "#334155" : "#f1f5f9",
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#475569" : "#e2e8f0",
+  },
+  clearDateButton: {
+    backgroundColor: isDarkMode ? "#334155" : "#f1f5f9",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDarkMode ? "#475569" : "#e2e8f0",
+  },
+  clearDateButtonText: {
+    fontSize: 11,
+    color: isDarkMode ? "#94a3b8" : "#64748b",
+    fontWeight: '600',
   },
   filterScroll: {
     flexGrow: 0,
@@ -773,11 +1042,10 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: isDarkMode ? "#1e293b" : "#ffffff",
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: isDarkMode ? "#334155" : "#e2e8f0",
-    marginBottom: 4,
   },
   searchInput: {
     flex: 1,
@@ -845,19 +1113,100 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   periodButtonTextActive: {
     color: '#ffffff',
   },
-  debugContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: isDarkMode ? "#1e293b" : "#e0f2fe",
-    marginHorizontal: 16,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6366f1',
+  // Date Picker Styles
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  debugText: {
-    fontSize: 12,
-    color: isDarkMode ? "#94a3b8" : "#0369a1",
-    fontStyle: 'italic',
+  datePickerContainer: {
+    backgroundColor: isDarkMode ? "#1e293b" : "#ffffff",
+    padding: 20,
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: isDarkMode ? "#f1f5f9" : "#1e293b",
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  dateSelectionContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  dateSelectionButton: {
+    flex: 1,
+    backgroundColor: isDarkMode ? "#334155" : "#f1f5f9",
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+  },
+  dateSelectionButtonActive: {
+    borderColor: '#6366f1',
+    backgroundColor: isDarkMode ? "#3730a3" : "#e0e7ff",
+  },
+  dateSelectionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: isDarkMode ? "#94a3b8" : "#64748b",
+    marginBottom: 5,
+  },
+  dateSelectionButtonTextActive: {
+    color: '#6366f1',
+  },
+  dateSelectionDateText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: isDarkMode ? "#f1f5f9" : "#1e293b",
+  },
+  datePicker: {
+    height: Platform.OS === 'ios' ? 200 : undefined,
+    marginBottom: 20,
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  datePickerCancel: {
+    flex: 1,
+    backgroundColor: isDarkMode ? "#334155" : "#f1f5f9",
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  datePickerCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: isDarkMode ? "#94a3b8" : "#64748b",
+  },
+  datePickerApply: {
+    flex: 2,
+    backgroundColor: '#6366f1',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  datePickerApplyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  dateErrorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,
@@ -881,11 +1230,6 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: isDarkMode ? "#334155" : "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: isDarkMode ? 0.1 : 0.03,
-    shadowRadius: 3,
-    elevation: 1,
   },
   itemHeader: {
     flexDirection: 'row',
@@ -1030,12 +1374,18 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontSize: 13,
     color: isDarkMode ? "#94a3b8" : "#64748b",
     textAlign: 'center',
+    marginBottom: 16,
   },
-  debugHint: {
-    fontSize: 12,
-    color: '#f59e0b',
-    marginTop: 8,
-    textAlign: 'center',
+  emptyStateButton: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyStateButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   clickIndicator: {
     position: 'absolute',
