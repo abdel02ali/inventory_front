@@ -69,7 +69,6 @@ export default function Dashboard() {
   const [todayDate, setTodayDate] = useState('');
   const [showDepartmentsModal, setShowDepartmentsModal] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -120,9 +119,6 @@ export default function Dashboard() {
       setDepartments(departmentsResponse.slice(0, 4));
       setAllDepartments(departmentsResponse);
       
-      // Update last refresh time
-      setLastRefreshTime(Date.now());
-      
       // Animate only on initial load or when shouldAnimate is true
       if (shouldAnimate || isInitialLoad) {
         Animated.parallel([
@@ -166,18 +162,12 @@ export default function Dashboard() {
     loadDashboardData(true);
   }, []);
 
-  // Smart refresh - only reload if it's been more than 5 minutes
+  // Refresh data on focus without animations
   useFocusEffect(
     useCallback(() => {
-      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in milliseconds
-      
-      if (lastRefreshTime < fiveMinutesAgo) {
-        console.log('🔄 Dashboard focused - data is stale, refreshing');
-        loadDashboardData(false);
-      } else {
-        console.log('📊 Dashboard focused - data is fresh, no refresh needed');
-      }
-    }, [lastRefreshTime])
+      console.log('🔄 Dashboard focused - refreshing data without animations');
+      loadDashboardData(false);
+    }, [])
   );
 
   const handleDepartmentsUpdate = () => {

@@ -68,8 +68,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [todayDate, setTodayDate] = useState('');
   const [showDepartmentsModal, setShowDepartmentsModal] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -85,7 +83,7 @@ export default function Dashboard() {
     return today.toLocaleDateString('en-US', options);
   };
 
-  const loadDashboardData = async (shouldAnimate = false) => {
+  const loadDashboardData = async () => {
     try {
       setLoading(true);
       setTodayDate(getTodayDate());
@@ -120,32 +118,19 @@ export default function Dashboard() {
       setDepartments(departmentsResponse.slice(0, 4));
       setAllDepartments(departmentsResponse);
       
-      // Update last refresh time
-      setLastRefreshTime(Date.now());
-      
-      // Animate only on initial load or when shouldAnimate is true
-      if (shouldAnimate || isInitialLoad) {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 600,
-            useNativeDriver: true,
-          })
-        ]).start();
-        
-        if (isInitialLoad) {
-          setIsInitialLoad(false);
-        }
-      } else {
-        // If no animation, set values immediately
-        fadeAnim.setValue(1);
-        slideAnim.setValue(0);
-      }
+      // Animate content in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start();
       
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -156,32 +141,24 @@ export default function Dashboard() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData(true); // Animate on pull-to-refresh
+    await loadDashboardData();
     setRefreshing(false);
   };
 
-  // Initial load with animations
-  useEffect(() => {
-    console.log('🔄 Dashboard mounted - loading data with animations');
-    loadDashboardData(true);
-  }, []);
-
-  // Smart refresh - only reload if it's been more than 5 minutes
+  // Use useFocusEffect to reload data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000); // 5 minutes in milliseconds
-      
-      if (lastRefreshTime < fiveMinutesAgo) {
-        console.log('🔄 Dashboard focused - data is stale, refreshing');
-        loadDashboardData(false);
-      } else {
-        console.log('📊 Dashboard focused - data is fresh, no refresh needed');
-      }
-    }, [lastRefreshTime])
+      console.log('🔄 Dashboard focused - reloading data');
+      loadDashboardData();
+    }, [])
   );
 
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
   const handleDepartmentsUpdate = () => {
-    loadDashboardData(false); // No animation when departments update
+    loadDashboardData();
   };
 
   // Modern gradient colors for stats
@@ -220,17 +197,12 @@ export default function Dashboard() {
     const scaleAnim = useState(new Animated.Value(0.9))[0];
     
     useEffect(() => {
-      // Only animate stat cards on initial load
-      if (isInitialLoad) {
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          delay: index * 100,
-          useNativeDriver: true,
-        }).start();
-      } else {
-        scaleAnim.setValue(1);
-      }
-    }, [isInitialLoad]);
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        delay: index * 100,
+        useNativeDriver: true,
+      }).start();
+    }, []);
 
     return (
       <Animated.View 
@@ -265,27 +237,21 @@ export default function Dashboard() {
     const fadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
-      // Only animate department cards on initial load
-      if (isInitialLoad) {
-        Animated.parallel([
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 500,
-            delay: index * 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 500,
-            delay: index * 100,
-            useNativeDriver: true,
-          })
-        ]).start();
-      } else {
-        slideAnim.setValue(0);
-        fadeAnim.setValue(1);
-      }
-    }, [isInitialLoad]);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          delay: index * 100,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, []);
 
     return (
       <Animated.View 
@@ -324,17 +290,12 @@ export default function Dashboard() {
     const pressAnim = useState(new Animated.Value(1))[0];
     
     useEffect(() => {
-      // Only animate quick actions on initial load
-      if (isInitialLoad) {
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          delay: index * 80,
-          useNativeDriver: true,
-        }).start();
-      } else {
-        scaleAnim.setValue(1);
-      }
-    }, [isInitialLoad]);
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        delay: index * 80,
+        useNativeDriver: true,
+      }).start();
+    }, []);
 
     const handlePressIn = () => {
       Animated.spring(pressAnim, {
@@ -388,27 +349,21 @@ export default function Dashboard() {
     const fadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
-      // Only animate product items on initial load
-      if (isInitialLoad) {
-        Animated.parallel([
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            delay: index * 60,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            delay: index * 60,
-            useNativeDriver: true,
-          })
-        ]).start();
-      } else {
-        slideAnim.setValue(0);
-        fadeAnim.setValue(1);
-      }
-    }, [isInitialLoad]);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: index * 60,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 60,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }, []);
 
     const getStatusColor = () => {
       return product.alertLevel === 'Out of Stock' ? '#EF4444' : 
@@ -522,13 +477,13 @@ export default function Dashboard() {
               <Text style={styles.date}>{todayDate}</Text>
             </View>
             {/* Logo Placeholder */}
-            <View style={styles.logoContainer}>
-              <Image 
-                source={require('../../assets/images/mlogo.jpeg')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+<View style={styles.logoContainer}>
+  <Image 
+    source={require('../../assets/images/mlogo.jpeg')} // or your logo path
+    style={styles.logoImage}
+    resizeMode="contain"
+  />
+</View>
           </View>
 
           {/* Stats Grid */}
@@ -688,7 +643,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     flex: 1, 
     backgroundColor: isDarkMode ? "#121212" : "#F9FAFB",
     paddingTop: 60,
-    
+    paddingBottom: 16,
   },
   scrollView: {
     flex: 1,
@@ -1085,4 +1040,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     height: 40,
     borderRadius: 8,
   },
+  // OR for the icon/text version:
+
+
 });

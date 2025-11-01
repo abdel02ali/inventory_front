@@ -3,7 +3,6 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type TabBarIconProps = {
   color: string;
@@ -14,7 +13,6 @@ type TabBarIconProps = {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -23,29 +21,28 @@ export default function TabLayout() {
         tabBarActiveTintColor: isDark ? '#f97316' : '#f97316',
         tabBarInactiveTintColor: isDark ? '#64748b' : '#94a3b8',
         tabBarStyle: {
-          backgroundColor: isDark ? '#1e293b' : '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: isDark ? '#334155' : '#e2e8f0',
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
-          paddingTop: 8,
-          marginHorizontal: 0,
-          marginBottom: 0,
-          borderRadius: 0,
-          shadowColor: 'transparent',
+          backgroundColor: isDark ? '#1e1e1e' : '#f8fafc', // Transparent background
+         
+          shadowColor: '#000',
           shadowOffset: {
             width: 0,
-            height: 0,
+            height: 2,
           },
-          shadowOpacity: 0,
-          shadowRadius: 0,
-          elevation: 0,
-          borderWidth: 0,
-          position: 'relative',
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 4,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
         },
         tabBarBackground: () => null,
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 10, borderTopWidth: 0,
+          height: 56,
+          paddingBottom: 6,
+          paddingTop: 8,
+          marginHorizontal: 16,
+          marginBottom: 16,
+          borderRadius: 16,
           fontWeight: '500',
           marginTop: 1,
         },
@@ -92,6 +89,28 @@ export default function TabLayout() {
           ),
         }}
       />
+      
     </Tabs>
   );
 }
+
+
+
+borderTopWidth: 0,
+          height: 56,
+          paddingBottom: 6,
+          paddingTop: 8,
+          marginHorizontal: 16,
+          marginBottom: 16,
+          borderRadius: 16,
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 4,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+        },

@@ -547,7 +547,7 @@ const fetchProducts = async (isRefresh = false) => {
     <View style={styles.container} >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Products Inventory</Text>
+        <Text style={styles.headerTitle}>Kitchen Inventory</Text>
         <Text style={styles.headerSubtitle}>Organized by categories</Text>
         
         {/* Header Actions */}
