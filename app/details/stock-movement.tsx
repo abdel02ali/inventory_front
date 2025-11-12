@@ -29,7 +29,7 @@ import {
   ProductSelection as StockProductSelection
 } from '../../services/stockMovmentService';
 import { useAppContext } from '../context/appContext';
-import { useNotifications } from '../context/NotificationContext';
+
 import { Department as ApiDepartment } from '../types/department';
 
 // Use the exact types from stockMovementService
@@ -61,7 +61,6 @@ export default function StockMovementScreen() {
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [activeProductIndex, setActiveProductIndex] = useState<number | null>(null);
   const [departmentDropdownVisible, setDepartmentDropdownVisible] = useState(false);
-    const { scheduleStockInAlert, scheduleDistributionAlert } = useNotifications();
   
   // Departments state
   const [departments, setDepartments] = useState<ApiDepartment[]>([]);
@@ -106,9 +105,10 @@ export default function StockMovementScreen() {
   }, []);
 
   // Helper function to get actual stock
-const getProductStock = (product: any) => {
-  return product.quantity || 0; // Remove the = sign
-};
+  const getProductStock = (product: any) => {
+    return product.quantity || 0;
+  };
+
   // Get selected department info
   const selectedDeptInfo = departments.find(dept => 
     selectedDepartment && dept.id === selectedDepartment.id
@@ -196,191 +196,125 @@ const getProductStock = (product: any) => {
   // Get selected product IDs for the modal
   const selectedProductIds = selectedProducts.map(p => p.productId).filter(Boolean);
 
-const handleSubmit = async () => {
-  console.log('🚀 handleSubmit started');
-  
-  // Validation checks
-  if (selectedProducts.length === 0) {
-    Alert.alert('Error', 'Please add at least one product');
-    return;
-  }
-
-  const invalidProducts = selectedProducts.filter(product => 
-    !product.productId || !product.quantity || parseInt(product.quantity) <= 0
-  );
-
-  if (invalidProducts.length > 0) {
-    Alert.alert('Error', 'Please fill all product fields with valid quantities');
-    return;
-  }
-
-  if (movementType === 'stock_in' && !supplier.trim()) {
-    Alert.alert('Error', 'Please enter supplier name for stock in');
-    return;
-  }
-
-  if (movementType === 'distribution' && !selectedDepartment) {
-    Alert.alert('Error', 'Please select a department for distribution');
-    return;
-  }
-
-  if (movementType === 'distribution' && departments.length === 0) {
-    Alert.alert('Error', 'No departments available. Please create departments first.');
-    return;
-  }
-
-  console.log('✅ All validations passed');
-  setIsSubmitting(true);
-
-  try {
-    // Convert selected products to the exact type expected by the service
-    const productsData: StockProductSelection[] = selectedProducts.map(product => ({
-      productId: product.productId,
-      productName: product.productName,
-      quantity: parseInt(product.quantity),
-      unit: product.unit
-    }));
-
-    // Create the exact data structure expected by the service
-    const movementData: StockMovementData = {
-      type: movementType,
-      stockManager: 'Abdelali', // You can get this from user context
-      products: productsData,
-      ...(movementType === 'distribution' && selectedDepartment && {
-        department: {
-          id: selectedDepartment.id,
-          name: selectedDepartment.name
-        }
-      }),
-      ...(movementType === 'stock_in' && {
-        supplier: supplier.trim()
-      }),
-      ...(notes.trim() && {
-        notes: notes.trim()
-      })
-    };
-
-    console.log('📦 Submitting movement data:', JSON.stringify(movementData, null, 2));
-
-    const result = await stockMovementService.createMovement(movementData);
-    console.log('📦 Movement creation result:', result);
-
-    if (result.success) {
-      console.log('✅ Movement created successfully');
-      console.log('🔄 Refreshing products after movement creation...');
-      await refreshProducts();
-      
-      console.log('📢 STARTING NOTIFICATION FLOW...');
-      
-      // Extract product names WITH QUANTITIES from selected products
-      const productNames = selectedProducts
-        .map(product => {
-          const quantity = parseInt(product.quantity) || 0;
-          const unit = product.unit || 'units';
-          // Include quantity in the product name string
-          return `${product.productName} (${quantity} ${unit})`;
-        })
-        .filter(name => name && name.trim() !== '' && !name.startsWith(' (')); // Filter out empty names
-
-      console.log('📦 Product names with quantities for notification:', productNames);
-
-      if (movementType === 'stock_in') {
-        // Calculate total value for stock in
-        const totalValue = selectedProducts.reduce((total, product) => {
-          const quantity = parseInt(product.quantity) || 0;
-          const unitPrice = product.unitPrice || 0;
-          return total + (quantity * unitPrice);
-        }, 0);
-
-        console.log('📢 Calling scheduleStockInAlert with:', {
-          productCount: selectedProducts.length,
-          productNames,
-          supplier,
-          totalValue,
-          stockManager: 'Abdelali'
-        });
-
-        try {
-          await scheduleStockInAlert(
-            selectedProducts.length,
-            supplier,
-            totalValue,
-            'Abdelali', // You can get this from user context
-            productNames // PASS PRODUCT NAMES WITH QUANTITIES
-          );
-          console.log('✅ scheduleStockInAlert completed successfully');
-        } catch (notificationError) {
-          console.error('❌ scheduleStockInAlert failed:', notificationError);
-        }
-      } else {
-        console.log('📢 Calling scheduleDistributionAlert with:', {
-          productCount: selectedProducts.length,
-          productNames,
-          department: selectedDepartment?.name,
-          stockManager: 'Abdelali'
-        });
-
-        try {
-          await scheduleDistributionAlert(
-            selectedProducts.length,
-            selectedDepartment?.name || 'Unknown Department',
-            'Abdelali', // You can get this from user context
-            productNames // PASS PRODUCT NAMES WITH QUANTITIES
-          );
-          console.log('✅ scheduleDistributionAlert completed successfully');
-        } catch (notificationError) {
-          console.error('❌ scheduleDistributionAlert failed:', notificationError);
-        }
-      }
-      // =============================================
-      // END OF MOVEMENT NOTIFICATION CODE
-      // =============================================
-
-      Alert.alert(
-        'Success!',
-        result.message || 'Stock movement created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('🔄 Resetting form and navigating back...');
-              // Reset form
-              setSelectedProducts([]);
-              setSupplier('');
-              setNotes('');
-              setMovementType('stock_in');
-              if (departments.length > 0) {
-                setSelectedDepartment({
-                  id: departments[0].id as StockMovementDepartment,
-                  name: departments[0].name
-                });
-              } else {
-                setSelectedDepartment(null);
-              }
-              router.back();
-            }
-          }
-        ]
-      );
-    } else {
-      console.error('❌ Movement creation failed:', result);
-      if (result.errors && result.errors.length > 0) {
-        Alert.alert('Validation Error', result.errors.join('\n'));
-      } else {
-        Alert.alert('Error', result.message || 'Failed to create stock movement. Please try again.');
-      }
+  const handleSubmit = async () => {
+    console.log('🚀 handleSubmit started');
+    
+    // Validation checks
+    if (selectedProducts.length === 0) {
+      Alert.alert('Error', 'Please add at least one product');
+      return;
     }
-  } catch (error: any) {
-    console.error('❌ Error creating stock movement:', error);
-    Alert.alert(
-      'Network Error', 
-      error.message || 'Failed to connect to server. Please check your internet connection and try again.'
+
+    const invalidProducts = selectedProducts.filter(product => 
+      !product.productId || !product.quantity || parseInt(product.quantity) <= 0
     );
-  } finally {
-    console.log('🏁 handleSubmit completed');
-    setIsSubmitting(false);
-  }
-};
+
+    if (invalidProducts.length > 0) {
+      Alert.alert('Error', 'Please fill all product fields with valid quantities');
+      return;
+    }
+
+    if (movementType === 'stock_in' && !supplier.trim()) {
+      Alert.alert('Error', 'Please enter supplier name for stock in');
+      return;
+    }
+
+    if (movementType === 'distribution' && !selectedDepartment) {
+      Alert.alert('Error', 'Please select a department for distribution');
+      return;
+    }
+
+    if (movementType === 'distribution' && departments.length === 0) {
+      Alert.alert('Error', 'No departments available. Please create departments first.');
+      return;
+    }
+
+    console.log('✅ All validations passed');
+    setIsSubmitting(true);
+
+    try {
+      // Convert selected products to the exact type expected by the service
+      const productsData: StockProductSelection[] = selectedProducts.map(product => ({
+        productId: product.productId,
+        productName: product.productName,
+        quantity: parseInt(product.quantity),
+        unit: product.unit
+      }));
+
+      // Create the exact data structure expected by the service
+      const movementData: StockMovementData = {
+        type: movementType,
+        stockManager: 'Abdelali', // You can get this from user context
+        products: productsData,
+        ...(movementType === 'distribution' && selectedDepartment && {
+          department: {
+            id: selectedDepartment.id,
+            name: selectedDepartment.name
+          }
+        }),
+        ...(movementType === 'stock_in' && {
+          supplier: supplier.trim()
+        }),
+        ...(notes.trim() && {
+          notes: notes.trim()
+        })
+      };
+
+      console.log('📦 Submitting movement data:', JSON.stringify(movementData, null, 2));
+
+      const result = await stockMovementService.createMovement(movementData);
+      console.log('📦 Movement creation result:', result);
+
+      if (result.success) {
+        console.log('✅ Movement created successfully');
+        console.log('🔄 Refreshing products after movement creation...');
+        await refreshProducts();
+
+        Alert.alert(
+          'Success!',
+          result.message || 'Stock movement created successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('🔄 Resetting form and navigating back...');
+                // Reset form
+                setSelectedProducts([]);
+                setSupplier('');
+                setNotes('');
+                setMovementType('stock_in');
+                if (departments.length > 0) {
+                  setSelectedDepartment({
+                    id: departments[0].id as StockMovementDepartment,
+                    name: departments[0].name
+                  });
+                } else {
+                  setSelectedDepartment(null);
+                }
+                router.back();
+              }
+            }
+          ]
+        );
+      } else {
+        console.error('❌ Movement creation failed:', result);
+        if (result.errors && result.errors.length > 0) {
+          Alert.alert('Validation Error', result.errors.join('\n'));
+        } else {
+          Alert.alert('Error', result.message || 'Failed to create stock movement. Please try again.');
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error creating stock movement:', error);
+      Alert.alert(
+        'Network Error', 
+        error.message || 'Failed to connect to server. Please check your internet connection and try again.'
+      );
+    } finally {
+      console.log('🏁 handleSubmit completed');
+      setIsSubmitting(false);
+    }
+  };
 
   // Department Dropdown Modal
   const DepartmentDropdownModal = () => (
@@ -459,282 +393,282 @@ const handleSubmit = async () => {
     </Modal>
   );
 
-return (
-  <KeyboardAvoidingView 
-    style={styles.container}
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-  >
-    <Stack.Screen options={{ headerShown: false }} />
-    
-    {/* Fixed Header */}
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#ffffff" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>Add Stock Movement</Text>
-      <Text style={styles.headerSubtitle}>Manage inventory movements</Text>
-    </View>
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Fixed Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Add Stock Movement</Text>
+        <Text style={styles.headerSubtitle}>Manage inventory movements</Text>
+      </View>
 
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ScrollView 
-        style={styles.contentContainer} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.content}>
-          {/* Movement Type Selection */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Movement Type</Text>
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  movementType === 'stock_in' && styles.typeButtonActive
-                ]}
-                onPress={() => setMovementType('stock_in')}
-              >
-                <Text style={[
-                  styles.typeButtonText,
-                  movementType === 'stock_in' && styles.typeButtonTextActive
-                ]}>
-                  📥 Stock In
-                </Text>
-                <Text style={styles.typeDescription}>Add products to inventory</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  movementType === 'distribution' && styles.typeButtonActive
-                ]}
-                onPress={() => setMovementType('distribution')}
-              >
-                <Text style={[
-                  styles.typeButtonText,
-                  movementType === 'distribution' && styles.typeButtonTextActive
-                ]}>
-                  📤 Distribution
-                </Text>
-                <Text style={styles.typeDescription}>Distribute to departments</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Department Selection (only for distributions) */}
-          {movementType === 'distribution' && (
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          style={styles.contentContainer} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.content}>
+            {/* Movement Type Selection */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Select Department</Text>
-              {loadingDepartments ? (
-                <View style={styles.departmentLoading}>
-                  <ActivityIndicator size="small" color="#6366f1" />
-                  <Text style={styles.departmentLoadingText}>Loading departments...</Text>
-                </View>
-              ) : departments.length === 0 ? (
-                <View style={styles.noDepartments}>
-                  <Ionicons name="business-outline" size={24} color="#ef4444" />
-                  <Text style={styles.noDepartmentsText}>No departments available</Text>
-                  <TouchableOpacity 
-                    style={styles.createDepartmentButton}
-                    onPress={() => router.push('/details/create-department')}
-                  >
-                    <Text style={styles.createDepartmentButtonText}>Create Department</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
+              <Text style={styles.sectionTitle}>Movement Type</Text>
+              <View style={styles.typeSelector}>
                 <TouchableOpacity
-                  style={styles.departmentDropdownTrigger}
-                  onPress={openDepartmentDropdown}
+                  style={[
+                    styles.typeButton,
+                    movementType === 'stock_in' && styles.typeButtonActive
+                  ]}
+                  onPress={() => setMovementType('stock_in')}
                 >
-                  <View style={styles.departmentTriggerContent}>
-                    {selectedDepartment ? (
-                      <>
-                        <Text style={styles.departmentIcon}>
-                          {selectedDeptInfo?.icon || '🏢'}
-                        </Text>
-                        <View style={styles.departmentTriggerInfo}>
-                          <Text style={styles.departmentTriggerLabel}>{selectedDepartment.name}</Text>
-                          <Text style={styles.departmentTriggerDescription}>
-                            Department ID: {selectedDepartment.id}
-                          </Text>
-                        </View>
-                      </>
-                    ) : (
-                      <Text style={styles.dropdownPlaceholder}>Select a department</Text>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-down" size={20} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+                  <Text style={[
+                    styles.typeButtonText,
+                    movementType === 'stock_in' && styles.typeButtonTextActive
+                  ]}>
+                    📥 Stock In
+                  </Text>
+                  <Text style={styles.typeDescription}>Add products to inventory</Text>
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
 
-          {/* Supplier (only for stock in) */}
-          {movementType === 'stock_in' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Supplier Information</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter supplier name"
-                placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
-                value={supplier}
-                onChangeText={setSupplier}
-              />
-            </View>
-          )}
-
-          {/* Products Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Products</Text>
-                <Text style={styles.sectionSubtitle}>
-                  {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
-                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    movementType === 'distribution' && styles.typeButtonActive
+                  ]}
+                  onPress={() => setMovementType('distribution')}
+                >
+                  <Text style={[
+                    styles.typeButtonText,
+                    movementType === 'distribution' && styles.typeButtonTextActive
+                  ]}>
+                    📤 Distribution
+                  </Text>
+                  <Text style={styles.typeDescription}>Distribute to departments</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            {/* Products List */}
-            {selectedProducts.map((product, index) => (
-              <View key={index} style={styles.productCard}>
-                <View style={styles.productHeader}>
-                  <Text style={styles.productNumber}>Product {index + 1}</Text>
-                  <TouchableOpacity 
-                    style={styles.deleteButton}
-                    onPress={() => removeProduct(index)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.productForm}>
-                  {/* Product Selection Dropdown */}
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Product *</Text>
-                    <TouchableOpacity
-                      style={styles.dropdownTrigger}
-                      onPress={() => openProductDropdown(index)}
+            {/* Department Selection (only for distributions) */}
+            {movementType === 'distribution' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Select Department</Text>
+                {loadingDepartments ? (
+                  <View style={styles.departmentLoading}>
+                    <ActivityIndicator size="small" color="#6366f1" />
+                    <Text style={styles.departmentLoadingText}>Loading departments...</Text>
+                  </View>
+                ) : departments.length === 0 ? (
+                  <View style={styles.noDepartments}>
+                    <Ionicons name="business-outline" size={24} color="#ef4444" />
+                    <Text style={styles.noDepartmentsText}>No departments available</Text>
+                    <TouchableOpacity 
+                      style={styles.createDepartmentButton}
+                      onPress={() => router.push('/details/create-department')}
                     >
-                      <Text style={[
-                        styles.dropdownTriggerText,
-                        !product.productName && styles.dropdownPlaceholder
-                      ]}>
-                        {product.productName || 'Select a product'}
-                      </Text>
-                      <Ionicons name="chevron-down" size={16} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+                      <Text style={styles.createDepartmentButtonText}>Create Department</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.departmentDropdownTrigger}
+                    onPress={openDepartmentDropdown}
+                  >
+                    <View style={styles.departmentTriggerContent}>
+                      {selectedDepartment ? (
+                        <>
+                          <Text style={styles.departmentIcon}>
+                            {selectedDeptInfo?.icon || '🏢'}
+                          </Text>
+                          <View style={styles.departmentTriggerInfo}>
+                            <Text style={styles.departmentTriggerLabel}>{selectedDepartment.name}</Text>
+                            <Text style={styles.departmentTriggerDescription}>
+                              Department ID: {selectedDepartment.id}
+                            </Text>
+                          </View>
+                        </>
+                      ) : (
+                        <Text style={styles.dropdownPlaceholder}>Select a department</Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Supplier (only for stock in) */}
+            {movementType === 'stock_in' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Supplier Information</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter supplier name"
+                  placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
+                  value={supplier}
+                  onChangeText={setSupplier}
+                />
+              </View>
+            )}
+
+            {/* Products Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Products</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
+                  </Text>
+                </View>
+              </View>
+
+              {/* Products List */}
+              {selectedProducts.map((product, index) => (
+                <View key={index} style={styles.productCard}>
+                  <View style={styles.productHeader}>
+                    <Text style={styles.productNumber}>Product {index + 1}</Text>
+                    <TouchableOpacity 
+                      style={styles.deleteButton}
+                      onPress={() => removeProduct(index)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.productRow}>
-                    {/* Quantity Input */}
-                    <View style={[styles.inputGroup, styles.quantityInput]}>
-                      <Text style={styles.inputLabel}>
-                        Quantity * {product.productId && (
-      <Text style={styles.currentStockInfo}>
-        
-      </Text>
-    )}
-                      </Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="0"
-                        placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
-                        keyboardType="numeric"
-                        value={product.quantity}
-                        onChangeText={(value) => updateProduct(index, 'quantity', value)}
-                      />
+                  <View style={styles.productForm}>
+                    {/* Product Selection Dropdown */}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Product *</Text>
+                      <TouchableOpacity
+                        style={styles.dropdownTrigger}
+                        onPress={() => openProductDropdown(index)}
+                      >
+                        <Text style={[
+                          styles.dropdownTriggerText,
+                          !product.productName && styles.dropdownPlaceholder
+                        ]}>
+                          {product.productName || 'Select a product'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color={isDarkMode ? "#94a3b8" : "#64748b"} />
+                      </TouchableOpacity>
                     </View>
 
-                    {/* Unit Display (read-only) */}
-                    <View style={[styles.inputGroup, styles.unitInput]}>
-                      <Text style={styles.inputLabel}>Unit</Text>
-                      <View style={styles.unitDisplay}>
-                        <Text style={styles.unitText}>{product.unit || '-'}</Text>
+                    <View style={styles.productRow}>
+                      {/* Quantity Input */}
+                      <View style={[styles.inputGroup, styles.quantityInput]}>
+                        <Text style={styles.inputLabel}>
+                          Quantity * {product.productId && (
+                          <Text style={styles.currentStockInfo}>
+                            
+                          </Text>
+                        )}
+                        </Text>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="0"
+                          placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
+                          keyboardType="numeric"
+                          value={product.quantity}
+                          onChangeText={(value) => updateProduct(index, 'quantity', value)}
+                        />
+                      </View>
+
+                      {/* Unit Display (read-only) */}
+                      <View style={[styles.inputGroup, styles.unitInput]}>
+                        <Text style={styles.inputLabel}>Unit</Text>
+                        <View style={styles.unitDisplay}>
+                          <Text style={styles.unitText}>{product.unit || '-'}</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              ))}
 
-            {/* Add Product Button */}
-            <TouchableOpacity 
-              style={styles.addProductButton}
-              onPress={addProduct}
+              {/* Add Product Button */}
+              <TouchableOpacity 
+                style={styles.addProductButton}
+                onPress={addProduct}
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
+                <Text style={styles.addProductButtonText}>Add Product</Text>
+              </TouchableOpacity>
+
+              {selectedProducts.length === 0 && (
+                <View style={styles.emptyProducts}>
+                  <Ionicons name="cube-outline" size={48} color={isDarkMode ? "#475569" : "#cbd5e1"} />
+                  <Text style={styles.emptyProductsText}>No products added</Text>
+                  <Text style={styles.emptyProductsSubtext}>
+                    Add products to continue
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Notes */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Notes (Optional)</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Add any notes about this movement..."
+                placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
+                multiline
+                numberOfLines={3}
+                value={notes}
+                onChangeText={setNotes}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                (isSubmitting || 
+                 (movementType === 'distribution' && departments.length === 0) ||
+                 (movementType === 'distribution' && !selectedDepartment)
+                ) && styles.submitButtonDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={
+                isSubmitting || 
+                (movementType === 'distribution' && departments.length === 0) ||
+                (movementType === 'distribution' && !selectedDepartment)
+              }
             >
-              <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
-              <Text style={styles.addProductButtonText}>Add Product</Text>
-            </TouchableOpacity>
-
-            {selectedProducts.length === 0 && (
-              <View style={styles.emptyProducts}>
-                <Ionicons name="cube-outline" size={48} color={isDarkMode ? "#475569" : "#cbd5e1"} />
-                <Text style={styles.emptyProductsText}>No products added</Text>
-                <Text style={styles.emptyProductsSubtext}>
-                  Add products to continue
+              {isSubmitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  Confirm {movementType === 'stock_in' ? 'Stock In' : 'Distribution'}
                 </Text>
-              </View>
-            )}
+              )}
+            </TouchableOpacity>
           </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
 
-          {/* Notes */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Notes (Optional)</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Add any notes about this movement..."
-              placeholderTextColor={isDarkMode ? "#94a3b8" : "#9ca3af"}
-              multiline
-              numberOfLines={3}
-              value={notes}
-              onChangeText={setNotes}
-            />
-          </View>
+      {/* Product Selection Modal */}
+      <ProductSelectionModal
+        visible={productModalVisible}
+        onClose={() => {
+          setProductModalVisible(false);
+          setActiveProductIndex(null);
+        }}
+        onSelect={selectProduct}
+        onAddProduct={handleAddProduct}
+        movementType={movementType}
+        selectedProductIds={selectedProductIds}
+      />
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              (isSubmitting || 
-               (movementType === 'distribution' && departments.length === 0) ||
-               (movementType === 'distribution' && !selectedDepartment)
-              ) && styles.submitButtonDisabled
-            ]}
-            onPress={handleSubmit}
-            disabled={
-              isSubmitting || 
-              (movementType === 'distribution' && departments.length === 0) ||
-              (movementType === 'distribution' && !selectedDepartment)
-            }
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitButtonText}>
-                Confirm {movementType === 'stock_in' ? 'Stock In' : 'Distribution'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </TouchableWithoutFeedback>
-
-    {/* Product Selection Modal */}
-    <ProductSelectionModal
-      visible={productModalVisible}
-      onClose={() => {
-        setProductModalVisible(false);
-        setActiveProductIndex(null);
-      }}
-      onSelect={selectProduct}
-      onAddProduct={handleAddProduct}
-      movementType={movementType}
-      selectedProductIds={selectedProductIds}
-    />
-
-    {/* Department Dropdown Modal */}
-    <DepartmentDropdownModal />
-  </KeyboardAvoidingView>
-);
+      {/* Department Dropdown Modal */}
+      <DepartmentDropdownModal />
+    </KeyboardAvoidingView>
+  );
 }
 
 const getStyles = (isDarkMode: boolean) => StyleSheet.create({
@@ -1141,7 +1075,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-    contentContainer: {
+  contentContainer: {
     flex: 1,
   },
 });

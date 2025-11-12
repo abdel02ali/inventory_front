@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -80,7 +80,7 @@ export default function HistoryScreen() {
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [initialLoad, setInitialLoad] = useState(true);
-  const [showFilters, setShowFilters] = useState(true); // New state for showing/hiding filters
+  const [showFilters, setShowFilters] = useState(true);
   
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -238,6 +238,17 @@ export default function HistoryScreen() {
   const handleManualRefresh = async () => {
     await handleRefresh();
   };
+
+  // Auto-refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 HistoryScreen focused - refreshing data...');
+      if (!initialLoad) {
+        setRefreshing(true);
+        handleRefresh();
+      }
+    }, [initialLoad])
+  );
 
   // Toggle filters visibility
   const toggleFilters = () => {
@@ -578,6 +589,9 @@ export default function HistoryScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        
+        {/* Last Updated Status */}
+       
       </View>
 
       {/* Statistics */}
@@ -604,7 +618,7 @@ export default function HistoryScreen() {
         </View>
       )}
 
-      {/* Filters Section - Conditionally rendered */}
+      {/* Filters Section */}
       {showFilters && (
         <View style={styles.filtersContainer}>
           {/* Search */}
@@ -766,7 +780,7 @@ export default function HistoryScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={[
             styles.listContent,
-            !showFilters && styles.listContentNoFilters // Adjust padding when filters are hidden
+            !showFilters && styles.listContentNoFilters
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -876,7 +890,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   header: {
     padding: 20,
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 16,
     backgroundColor: '#6366f1',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -885,6 +899,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
   headerActions: {
     flexDirection: 'row',
@@ -895,6 +910,14 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
+  },
+  // Last Updated Styles
+  lastUpdatedContainer: {
+    alignItems: 'flex-end',
+  },
+  lastUpdatedText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   // Toggle Filters Button
   toggleFiltersButton: {
@@ -968,17 +991,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
   },
-  lastUpdatedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 4,
-  },
-  lastUpdatedText: {
-    fontSize: 11,
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-    marginLeft: 4,
-  },
+  // ... (rest of your existing styles remain the same)
   filtersContainer: {
     padding: 16,
     gap: 8,
@@ -1201,7 +1214,7 @@ const getStyles = (isDarkMode: boolean) => StyleSheet.create({
     paddingBottom: 20,
   },
   listContentNoFilters: {
-    paddingTop: 16, // More padding when filters are hidden
+    paddingTop: 16,
   },
   sectionHeader: {
     paddingVertical: 12,

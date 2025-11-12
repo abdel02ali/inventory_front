@@ -45,7 +45,7 @@ export default function AnimatedSplash() {
   return (
     <View style={styles.container}>
       <Animated.Image 
-        source={require('../../assets/images/elhdistribution.png')} 
+        source={require('../../assets/images/mlogo.jpeg')} 
         style={[
           styles.logo,
           {
