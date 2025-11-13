@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "name": "sofra-stock-app",
+=======
+  "name": "name-app",
+>>>>>>> c9f1f08e52683c8833918db861c9ff3f67f44358
   "version": "1.0.0",
   "description": "This is an Expo project created with create-expo-app.",
   "main": "expo-router/entry",
