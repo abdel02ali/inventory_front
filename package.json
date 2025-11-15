@@ -1,5 +1,4 @@
 {
-
   "name": "sofra-stock-app",
   "version": "1.0.0",
   "description": "This is an Expo project created with create-expo-app.",
@@ -758,6 +757,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/react": "~19.1.10",
     "babel-plugin-module-resolver": "^5.0.2"
   }
 }

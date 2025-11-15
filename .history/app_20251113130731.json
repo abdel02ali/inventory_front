@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Sofra Gestion",
+    "slug": "manara-gestion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/mlogo.jpeg",
+    "scheme": "lamagest",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/mlogo.jpeg",
+        "backgroundColor": "#E6F4FE"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.abdelali02.SofraGestion"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/mlogo.jpeg"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/mlogo.jpeg",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a7edb59d-04ac-4ac9-af1e-0d29baceec0a"
+      }
+    },
+    "owner": "abdelali02"
+  }
+}

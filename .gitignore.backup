@@ -4,10 +4,9 @@
 /node_modules/
 /node_modules
 /.npm
-
-
-
-
+/.yarn
+/yarn-error.log
+/yarn.lock
 
 # Expo
 /.expo/
@@ -75,6 +74,7 @@ Desktop.ini
 /app-example/
 
 # EAS
+/eas.json
 
 # Firebase service account files (very important - sensitive data)
 backend/config/serviceAccount.json
@@ -82,6 +82,7 @@ backend/config/serviceAccount.json
 backend/config/serviceAccount.json.backup
 serviceAccountKey.json
 firebase-key.json
+*.json
 
 # Temporary files
 *.tmp
@@ -91,11 +92,3 @@ firebase-key.json
 
 expo-env.d.ts
 # @end expo-cli
-# Firebase service account files (specific patterns only)
-backend/config/serviceAccount.json
-**/serviceAccount.json
-backend/config/serviceAccount.json.backup
-serviceAccountKey.json
-firebase-key.json
-firebase-adminsdk-*.json
-*-firebase-adminsdk-*.json
