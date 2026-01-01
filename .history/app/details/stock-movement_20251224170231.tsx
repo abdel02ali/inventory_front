@@ -121,21 +121,11 @@ export default function StockMovementScreen() {
     const unitLower = unit.toLowerCase();
     
     if (decimalUnits.includes(unitLower)) {
-      // Allow decimals for these units (including 0.5, 0.25, etc.)
+      // Allow decimals for these units
       const normalizedValue = value.replace(',', '.');
-      // Improved regex: allows numbers like 0.5, 0.25, 1.5, etc.
-      // Pattern: optional digits, optional dot, at least one digit somewhere
-      const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+      const validDecimalRegex = /^\d*\.?\d*$/; // No negative numbers, allows decimals
       const decimalCount = (normalizedValue.match(/\./g) || []).length;
-      
-      // Check regex and decimal count
-      if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-        return false;
-      }
-      
-      // Additional check: ensure it's a valid number (not just ".")
-      const testNum = Number(normalizedValue);
-      return !isNaN(testNum) && isFinite(testNum);
+      return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
     } else if (integerUnits.includes(unitLower)) {
       // Only allow integers for these units
       const validIntegerRegex = /^\d+$/;
@@ -144,15 +134,9 @@ export default function StockMovementScreen() {
     
     // Default: allow decimals
     const normalizedValue = value.replace(',', '.');
-    const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+    const validDecimalRegex = /^\d*\.?\d*$/;
     const decimalCount = (normalizedValue.match(/\./g) || []).length;
-    
-    if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-      return false;
-    }
-    
-    const testNum = Number(normalizedValue);
-    return !isNaN(testNum) && isFinite(testNum);
+    return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
   };
 
   // Update product function with decimal support
@@ -293,7 +277,7 @@ export default function StockMovementScreen() {
       
       // Convert quantity to number for validation
       const cleanValue = product.quantity.replace(',', '.');
-      const quantityNum = parseFloat(cleanValue);
+      const quantityNum = Number(cleanValue);
       
       console.log(`🔍 Validating ${product.productName}:`);
       console.log(`   Input: "${product.quantity}" → Clean: "${cleanValue}" → Number: ${quantityNum}`);
@@ -301,8 +285,7 @@ export default function StockMovementScreen() {
       console.log(`   Is > 0: ${quantityNum > 0}`);
       console.log(`   Is valid: ${!isNaN(quantityNum) && quantityNum > 0}`);
       
-      // Allow decimal values like 0.5, 0.25, etc. (must be > 0)
-      return isNaN(quantityNum) || quantityNum <= 0 || !isFinite(quantityNum);
+      return isNaN(quantityNum) || quantityNum <= 0;
     });
 
     if (invalidProducts.length > 0) {

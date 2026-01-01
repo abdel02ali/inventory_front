@@ -7,14 +7,14 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://mongo-backs-l1s3.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://allamerica.xyz"
       }
     },
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mongo-backs-l1s3.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://allamerica.xyz"
       }
     },
     "production": {
@@ -24,7 +24,7 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://mongo-backs-l1s3.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://allamerica.xyz"
       }
     }
   },

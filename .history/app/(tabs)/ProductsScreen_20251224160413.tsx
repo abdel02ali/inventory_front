@@ -318,7 +318,7 @@ const fetchProducts = async (isRefresh = false) => {
   ), [isDarkMode, stockFilter, styles]);
 
 
-  const renderProductItem: ListRenderItem<Product> = useCallback(({ item }) => {
+  const renderProductItem: ListRenderItem<Product> = ({ item }) => {
     const displayQuantity = item.quantity || 0;
     const isOutOfStock = displayQuantity === 0;
     const isLowStock = displayQuantity > 0 && displayQuantity <= (item.lowStockThreshold || 10);
@@ -429,7 +429,7 @@ const fetchProducts = async (isRefresh = false) => {
         </View>
       </TouchableOpacity>
     );
-  }, [isDarkMode, router, styles, formatLastUsed]);
+  };
 
   if (loading && initialLoad) {
     return (
@@ -532,9 +532,6 @@ const fetchProducts = async (isRefresh = false) => {
         data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={renderProductItem}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

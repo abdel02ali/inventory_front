@@ -121,21 +121,11 @@ export default function StockMovementScreen() {
     const unitLower = unit.toLowerCase();
     
     if (decimalUnits.includes(unitLower)) {
-      // Allow decimals for these units (including 0.5, 0.25, etc.)
+      // Allow decimals for these units
       const normalizedValue = value.replace(',', '.');
-      // Improved regex: allows numbers like 0.5, 0.25, 1.5, etc.
-      // Pattern: optional digits, optional dot, at least one digit somewhere
-      const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+      const validDecimalRegex = /^\d*\.?\d*$/; // No negative numbers, allows decimals
       const decimalCount = (normalizedValue.match(/\./g) || []).length;
-      
-      // Check regex and decimal count
-      if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-        return false;
-      }
-      
-      // Additional check: ensure it's a valid number (not just ".")
-      const testNum = Number(normalizedValue);
-      return !isNaN(testNum) && isFinite(testNum);
+      return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
     } else if (integerUnits.includes(unitLower)) {
       // Only allow integers for these units
       const validIntegerRegex = /^\d+$/;
@@ -144,15 +134,9 @@ export default function StockMovementScreen() {
     
     // Default: allow decimals
     const normalizedValue = value.replace(',', '.');
-    const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+    const validDecimalRegex = /^\d*\.?\d*$/;
     const decimalCount = (normalizedValue.match(/\./g) || []).length;
-    
-    if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-      return false;
-    }
-    
-    const testNum = Number(normalizedValue);
-    return !isNaN(testNum) && isFinite(testNum);
+    return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
   };
 
   // Update product function with decimal support
@@ -187,8 +171,11 @@ export default function StockMovementScreen() {
         
         // If this is a stock_in movement, pre-fill a default quantity
         if (movementType === 'stock_in' && !updated[index].quantity) {
-          // Set default quantity to 1 for all units
-          updated[index].quantity = '1';
+          // Set default quantity based on unit type
+          const unitLower = updated[index].unit.toLowerCase();
+          const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
+          const defaultQuantity = isDecimalUnit ? '0.5' : '1';
+          updated[index].quantity = defaultQuantity;
         }
       }
     }
@@ -218,8 +205,9 @@ export default function StockMovementScreen() {
   const selectProduct = (product: any) => {
     if (activeProductIndex !== null) {
       const updated = [...selectedProducts];
-      // Set default quantity to 1 for stock_in, empty for distribution
-      const defaultQuantity = movementType === 'stock_in' ? '1' : '';
+      const unitLower = String(product.unit || 'units').toLowerCase();
+      const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
+      const defaultQuantity = movementType === 'stock_in' ? (isDecimalUnit ? '0.5' : '1') : '';
       
       updated[activeProductIndex] = {
         productId: product.id,
@@ -293,7 +281,7 @@ export default function StockMovementScreen() {
       
       // Convert quantity to number for validation
       const cleanValue = product.quantity.replace(',', '.');
-      const quantityNum = parseFloat(cleanValue);
+      const quantityNum = Number(cleanValue);
       
       console.log(`🔍 Validating ${product.productName}:`);
       console.log(`   Input: "${product.quantity}" → Clean: "${cleanValue}" → Number: ${quantityNum}`);
@@ -301,8 +289,7 @@ export default function StockMovementScreen() {
       console.log(`   Is > 0: ${quantityNum > 0}`);
       console.log(`   Is valid: ${!isNaN(quantityNum) && quantityNum > 0}`);
       
-      // Allow decimal values like 0.5, 0.25, etc. (must be > 0)
-      return isNaN(quantityNum) || quantityNum <= 0 || !isFinite(quantityNum);
+      return isNaN(quantityNum) || quantityNum <= 0;
     });
 
     if (invalidProducts.length > 0) {
@@ -779,7 +766,7 @@ export default function StockMovementScreen() {
               {selectedProducts.map((product, index) => {
                 const unitLower = product.unit.toLowerCase();
                 const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
-                const placeholderText = isDecimalUnit ? "1" : "1";
+                const placeholderText = isDecimalUnit ? "0.5" : "1";
                 
                 return (
                 <View key={index} style={styles.productCard}>
@@ -1050,7 +1037,7 @@ export default function StockMovementScreen() {
     </KeyboardAvoidingView>
   );
 }
-const getStyles = (isDarkMode: boolean, movementType: 'stock_in' | 'distribution') => StyleSheet.create({
+const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: isDarkMode ? "#0f172a" : "#f8fafc",

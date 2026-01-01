@@ -72,76 +72,55 @@ export interface ServiceResponse<T = any> {
   errors?: string[];
 }
 
-// Retry helper function with exponential backoff
-const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> => {
-  let lastError: any;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-      
-      // Don't retry on client errors (4xx) except timeout
-      if (error.response?.status >= 400 && error.response?.status < 500) {
-        const isTimeout = error.code === 'ECONNABORTED' || 
-                         error.message?.includes('timeout') ||
-                         error.message?.includes('buffering') ||
-                         error.response?.data?.errors?.some((e: string) => 
-                           e.includes('timeout') || 
-                           e.includes('buffering') ||
-                           e.includes('Connection operation')
-                         );
-        
-        if (!isTimeout) {
-          throw error;
-        }
-      }
-      
-      // Don't retry on last attempt
-      if (attempt === maxRetries - 1) {
-        break;
-      }
-      
-      // Calculate delay with exponential backoff
-      const delay = baseDelay * Math.pow(2, attempt);
-      console.log(`⏳ Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw lastError;
-};
-
 export const stockMovementService = {
-  // Create stock movement with retry logic
+  // Create stock movement
   async createMovement(movementData: StockMovementData): Promise<ServiceResponse<any>> {
     try {
-      const productCount = movementData.products.length;
-      console.log(`🔄 Creating stock movement with ${productCount} product(s)...`);
+      console.log('🔄 Creating stock movement...');
+      console.log('📦 Full movement data:', JSON.stringify(movementData, null, 2));
+      
+      // Log each product's quantity details
+      console.log('📊 Products with quantity details:');
+      movementData.products.forEach((product, index) => {
+        console.log(`  Product ${index + 1}: ${product.productName}`);
+        console.log(`    - Product ID: ${product.productId}`);
+        console.log(`    - Quantity: ${product.quantity} (type: ${typeof product.quantity})`);
+        console.log(`    - Unit: ${product.unit}`);
+      });
+      
+      // Log the API URL
+      console.log('🌐 API URL:', `${API_URL}/api/movements`);
+      
+      // Add request interceptor for this specific request
+      const requestInterceptor = axios.interceptors.request.use(request => {
+        if (request.url?.includes('/api/movements')) {
+          console.log('📡 Sending request to:', request.url);
+          console.log('📡 Request method:', request.method);
+          console.log('📡 Request data:', request.data);
+          console.log('📡 Request headers:', request.headers);
+        }
+        return request;
+      });
       
       // Increase timeout for multiple products (60 seconds)
       // MongoDB operations can take longer with multiple products
-      const timeout = productCount > 5 ? 60000 : 30000;
+      const timeout = movementData.products.length > 5 ? 60000 : 30000;
       
-      // Use retry logic for database timeout errors
-      const response = await retryWithBackoff(async () => {
-        return await axios.post(`${API_URL}/api/movements`, movementData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          timeout: timeout,
-        });
-      }, 3, 2000); // 3 retries with 2s, 4s, 8s delays
+      const response = await axios.post(`${API_URL}/api/movements`, movementData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        timeout: timeout,
+      });
+      
+      // Remove interceptor
+      axios.interceptors.request.eject(requestInterceptor);
       
       console.log('✅ Server response:', {
         status: response.status,
         statusText: response.statusText,
+        data: response.data
       });
       
       return {

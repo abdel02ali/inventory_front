@@ -103,60 +103,75 @@ export default function ProductsScreen() {
     return matchesSearch && matchesCategory && matchesStock;
   }), [products, searchQuery, selectedCategory, stockFilter]);
 
-  const formatLastUsed = useCallback((lastUsed?: string): string => {
-    if (!lastUsed) {
+  const formatLastUsed = (lastUsed?: string) => {
+  if (!lastUsed) {
+    console.log('❌ No lastUsed date provided');
+    return "Never used";
+  }
+  
+  try {
+    const lastUsedDate = new Date(lastUsed);
+    const now = new Date();
+    
+    console.log('📅 Date Debug:', {
+      input: lastUsed,
+      parsed: lastUsedDate.toString(),
+      now: now.toString(),
+      isValid: !isNaN(lastUsedDate.getTime())
+    });
+    
+    // Check if the date is valid
+    if (isNaN(lastUsedDate.getTime())) {
+      console.log('❌ Invalid date:', lastUsed);
       return "Never used";
     }
     
-    try {
-      const lastUsedDate = new Date(lastUsed);
-      const now = new Date();
-      
-      // Check if the date is valid
-      if (isNaN(lastUsedDate.getTime())) {
-        return "Never used";
-      }
-      
-      const diffTime = Math.abs(now.getTime() - lastUsedDate.getTime());
-      const diffMinutes = Math.floor(diffTime / (1000 * 60));
-      const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      // Handle same day
-      if (diffDays === 0) {
-        if (diffMinutes < 1) return "Just now";
-        if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
-        if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-        return "Today";
-      }
-      
-      // Handle yesterday
-      if (diffDays === 1) return "Yesterday";
-      
-      // Handle recent days
-      if (diffDays < 7) return `${diffDays} days ago`;
-      
-      // Handle weeks
-      if (diffDays < 30) {
-        const weeks = Math.floor(diffDays / 7);
-        return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-      }
-      
-      // Handle months
-      if (diffDays < 365) {
-        const months = Math.floor(diffDays / 30);
-        return `${months} month${months !== 1 ? 's' : ''} ago`;
-      }
-      
-      // Handle years
-      const years = Math.floor(diffDays / 365);
-      return `${years} year${years !== 1 ? 's' : ''} ago`;
-      
-    } catch (error) {
-      console.error('Error formatting last used date:', error);
-      return "Never used";
+    const diffTime = Math.abs(now.getTime() - lastUsedDate.getTime());
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    console.log('⏰ Time Differences:', {
+      minutes: diffMinutes,
+      hours: diffHours,
+      days: diffDays
+    });
+    
+    // Handle same day
+    if (diffDays === 0) {
+      if (diffMinutes < 1) return "Just now";
+      if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+      return "Today";
     }
-  }, []);
+    
+    // Handle yesterday
+    if (diffDays === 1) return "Yesterday";
+    
+    // Handle recent days
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    // Handle weeks
+    if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+    }
+    
+    // Handle months
+    if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return `${months} month${months !== 1 ? 's' : ''} ago`;
+    }
+    
+    // Handle years
+    const years = Math.floor(diffDays / 365);
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+    
+  } catch (error) {
+    console.error('❌ Error formatting last used date:', error);
+    return "Never used";
+  }
+};
 
   // Fetch products function
 const fetchProducts = async (isRefresh = false) => {
@@ -167,17 +182,23 @@ const fetchProducts = async (isRefresh = false) => {
       setLoading(true);
     }
 
+    console.log('🔄 Fetching products...');
+    
     // Vérifier si getProducts existe
     if (typeof getProducts !== 'function') {
       throw new Error('getProducts function is not available');
     }
 
     const res = await getProducts();
+    console.log('📦 Products API response:', res);
     
     // Vérifier la structure de la réponse
     if (!res || !res.data) {
+      console.warn('⚠️ Unexpected API response structure:', res);
       throw new Error('Invalid API response');
     }
+    
+    console.log('📦 Products loaded:', res.data);
 
     // Normalize the data to handle inconsistent field names
     const normalizedProducts = (res.data.data || res.data || []).map((product: any) => {
@@ -217,11 +238,12 @@ const fetchProducts = async (isRefresh = false) => {
       };
     });
     
+    console.log('🔄 Normalized products:', normalizedProducts);
     setProducts(normalizedProducts);
     
     // Extract categories from products
     const extractedCategories = extractCategoriesFromProducts(normalizedProducts);
-    setCategories(extractedCategories.length > 1 ? extractedCategories : ["All", ...COMMON_CATEGORIES]);
+    setCategories(extractedCategories.length > 1 ? extractedCategories : commonCategories);
     
     setInitialLoad(false);
   } catch (err) {
@@ -235,7 +257,7 @@ const fetchProducts = async (isRefresh = false) => {
     
     Alert.alert("Error", errorMessage);
     setProducts([]);
-    setCategories(["All", ...COMMON_CATEGORIES]);
+    setCategories(commonCategories);
   } finally {
     setLoading(false);
     setRefreshing(false);
@@ -244,6 +266,7 @@ const fetchProducts = async (isRefresh = false) => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('🔄 ProductsScreen focused - refreshing data...');
       if (!initialLoad) {
         setRefreshing(true);
         fetchProducts(true);
@@ -252,13 +275,15 @@ const fetchProducts = async (isRefresh = false) => {
   );
 
   useEffect(() => {
+    console.log('🚀 ProductsScreen mounted - initial load');
     fetchProducts();
   }, []);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = () => {
+    console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
     fetchProducts(true);
-  }, []);
+  };
 
   const handleAddProduct = () => {
     router.push("/details/add-product");
@@ -268,15 +293,15 @@ const fetchProducts = async (isRefresh = false) => {
     setShowFilters(!showFilters);
   };
 
-  const clearAllFilters = useCallback(() => {
+  const clearAllFilters = () => {
     setSearchQuery("");
     setSelectedCategory("All");
     setStockFilter("All");
-  }, []);
+  };
 
-  const styles = useMemo(() => getStyles(isDarkMode), [isDarkMode]);
+  const styles = getStyles(isDarkMode);
 
-  const renderCategoryChip = useCallback((category: string) => {
+  const renderCategoryChip = (category: string) => {
     const categoryColor = category === "All" ? (isDarkMode ? "#2E8B57" : "#2E8B57") : getCategoryColor(category);
     
     return (
@@ -297,9 +322,9 @@ const fetchProducts = async (isRefresh = false) => {
         </Text>
       </TouchableOpacity>
     );
-  }, [isDarkMode, selectedCategory, styles]);
+  };
 
-  const renderStockFilterChip = useCallback((filter: string) => (
+  const renderStockFilterChip = (filter: string) => (
     <TouchableOpacity
       key={filter}
       style={[
@@ -315,10 +340,38 @@ const fetchProducts = async (isRefresh = false) => {
         {filter}
       </Text>
     </TouchableOpacity>
-  ), [isDarkMode, stockFilter, styles]);
+  );
 
+  // Get category icon emoji
+  const getCategoryIcon = (category: string) => {
+    const iconMap: {[key: string]: string} = {
+      'Vegetables': '🥦',
+      'Fruits': '🍎',
+      'Meat': '🥩',
+      'Seafood': '🐟',
+      'Dairy': '🥛',
+      'Herbs & Spices': '🌿',
+      'Grains & Pasta': '🍚',
+      'Oils & Vinegars': '🫒',
+      'Canned Goods': '🥫',
+      'Bakery': '🍞',
+      'Beverages': '🥤',
+      'Cleaning Supplies': '🧽',
+      'Paper Goods': '🧻',
+      'Utensils': '🍴',
+      'Equipment': '🔪',
+      'Frozen Foods': '🧊',
+      'Condiments': '🧂',
+      'Spices': '🌶️',
+      'Baking Supplies': '🧁',
+      'Fresh Herbs': '🌱',
+      'Other': '📦',
+    };
+    
+    return iconMap[category] || '📦';
+  };
 
-  const renderProductItem: ListRenderItem<Product> = useCallback(({ item }) => {
+  const renderProductItem: ListRenderItem<Product> = ({ item }) => {
     const displayQuantity = item.quantity || 0;
     const isOutOfStock = displayQuantity === 0;
     const isLowStock = displayQuantity > 0 && displayQuantity <= (item.lowStockThreshold || 10);
@@ -429,7 +482,7 @@ const fetchProducts = async (isRefresh = false) => {
         </View>
       </TouchableOpacity>
     );
-  }, [isDarkMode, router, styles, formatLastUsed]);
+  };
 
   if (loading && initialLoad) {
     return (
@@ -532,9 +585,6 @@ const fetchProducts = async (isRefresh = false) => {
         data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={renderProductItem}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

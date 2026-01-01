@@ -72,76 +72,55 @@ export interface ServiceResponse<T = any> {
   errors?: string[];
 }
 
-// Retry helper function with exponential backoff
-const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> => {
-  let lastError: any;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-      
-      // Don't retry on client errors (4xx) except timeout
-      if (error.response?.status >= 400 && error.response?.status < 500) {
-        const isTimeout = error.code === 'ECONNABORTED' || 
-                         error.message?.includes('timeout') ||
-                         error.message?.includes('buffering') ||
-                         error.response?.data?.errors?.some((e: string) => 
-                           e.includes('timeout') || 
-                           e.includes('buffering') ||
-                           e.includes('Connection operation')
-                         );
-        
-        if (!isTimeout) {
-          throw error;
-        }
-      }
-      
-      // Don't retry on last attempt
-      if (attempt === maxRetries - 1) {
-        break;
-      }
-      
-      // Calculate delay with exponential backoff
-      const delay = baseDelay * Math.pow(2, attempt);
-      console.log(`⏳ Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw lastError;
-};
-
 export const stockMovementService = {
-  // Create stock movement with retry logic
+  // Create stock movement
   async createMovement(movementData: StockMovementData): Promise<ServiceResponse<any>> {
     try {
-      const productCount = movementData.products.length;
-      console.log(`🔄 Creating stock movement with ${productCount} product(s)...`);
+      console.log('🔄 Creating stock movement...');
+      console.log('📦 Full movement data:', JSON.stringify(movementData, null, 2));
+      
+      // Log each product's quantity details
+      console.log('📊 Products with quantity details:');
+      movementData.products.forEach((product, index) => {
+        console.log(`  Product ${index + 1}: ${product.productName}`);
+        console.log(`    - Product ID: ${product.productId}`);
+        console.log(`    - Quantity: ${product.quantity} (type: ${typeof product.quantity})`);
+        console.log(`    - Unit: ${product.unit}`);
+      });
+      
+      // Log the API URL
+      console.log('🌐 API URL:', `${API_URL}/api/movements`);
+      
+      // Add request interceptor for this specific request
+      const requestInterceptor = axios.interceptors.request.use(request => {
+        if (request.url?.includes('/api/movements')) {
+          console.log('📡 Sending request to:', request.url);
+          console.log('📡 Request method:', request.method);
+          console.log('📡 Request data:', request.data);
+          console.log('📡 Request headers:', request.headers);
+        }
+        return request;
+      });
       
       // Increase timeout for multiple products (60 seconds)
       // MongoDB operations can take longer with multiple products
-      const timeout = productCount > 5 ? 60000 : 30000;
+      const timeout = movementData.products.length > 5 ? 60000 : 30000;
       
-      // Use retry logic for database timeout errors
-      const response = await retryWithBackoff(async () => {
-        return await axios.post(`${API_URL}/api/movements`, movementData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          timeout: timeout,
-        });
-      }, 3, 2000); // 3 retries with 2s, 4s, 8s delays
+      const response = await axios.post(`${API_URL}/api/movements`, movementData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        timeout: timeout,
+      });
+      
+      // Remove interceptor
+      axios.interceptors.request.eject(requestInterceptor);
       
       console.log('✅ Server response:', {
         status: response.status,
         statusText: response.statusText,
+        data: response.data
       });
       
       return {
@@ -157,43 +136,21 @@ export const stockMovementService = {
       if (error.response) {
         // The request was made and the server responded with a status code
         // that falls out of the range of 2xx
-        const errorData = error.response.data;
-        const errorMessage = errorData?.message || `Server error: ${error.response.status}`;
-        const errors = errorData?.errors || [];
-        
-        // Check for MongoDB timeout errors
-        const isTimeoutError = errors.some((e: string) => 
-          e.includes('timeout') || 
-          e.includes('buffering') ||
-          e.includes('Connection operation')
-        );
-        
-        if (isTimeoutError) {
-          return {
-            success: false,
-            message: 'Database operation timed out. This can happen when processing many products at once. Please try again or add products in smaller batches.',
-            errors: ['Database timeout - try adding fewer products at once']
-          };
-        }
+        console.error('❌ Response status:', error.response.status);
+        console.error('❌ Response headers:', error.response.headers);
+        console.error('❌ Response data:', error.response.data);
+        console.error('❌ Full error response:', JSON.stringify(error.response.data, null, 2));
         
         return {
           success: false,
-          message: errorMessage,
-          errors: errors.length > 0 ? errors : [`Status: ${error.response.status}`]
+          message: error.response.data?.message || `Server error: ${error.response.status}`,
+          errors: error.response.data?.errors || [`Status: ${error.response.status}`]
         };
       } else if (error.request) {
-        // Check if it's a timeout error
-        const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
-        
-        if (isTimeout) {
-          return {
-            success: false,
-            message: 'Request timed out. The server is taking too long to process your request. Please try again or add products in smaller batches.',
-            errors: ['Request timeout']
-          };
-        }
-        
         // The request was made but no response was received
+        console.error('❌ No response received');
+        console.error('❌ Request:', error.request);
+        
         return {
           success: false,
           message: 'No response from server. Please check your internet connection.',
@@ -201,6 +158,8 @@ export const stockMovementService = {
         };
       } else {
         // Something happened in setting up the request that triggered an Error
+        console.error('❌ Request setup error:', error.message);
+        
         return {
           success: false,
           message: 'Failed to create stock movement',

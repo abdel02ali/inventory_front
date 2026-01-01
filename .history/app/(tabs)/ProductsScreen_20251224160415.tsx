@@ -429,7 +429,7 @@ const fetchProducts = async (isRefresh = false) => {
         </View>
       </TouchableOpacity>
     );
-  }, [isDarkMode, router, styles, formatLastUsed]);
+  };
 
   if (loading && initialLoad) {
     return (
@@ -532,9 +532,6 @@ const fetchProducts = async (isRefresh = false) => {
         data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={renderProductItem}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -67,14 +67,15 @@ export const getProducts = async () => {
       request: error.request ? 'Request made but no response' : 'No request made'
     });
     
-    // Return empty array instead of undefined mockProducts
-    console.log('⚠️ Using empty data due to API error');
+    // Pour le développement, retourner des données mock en cas d'erreur
+    console.log('⚠️ Using mock data due to API error');
+    
     
     return {
       data: {
         success: true,
-        data: [],
-        total: 0
+        data: mockProducts,
+        total: mockProducts.length
       }
     };
   }

@@ -90,12 +90,7 @@ const retryWithBackoff = async <T>(
       if (error.response?.status >= 400 && error.response?.status < 500) {
         const isTimeout = error.code === 'ECONNABORTED' || 
                          error.message?.includes('timeout') ||
-                         error.message?.includes('buffering') ||
-                         error.response?.data?.errors?.some((e: string) => 
-                           e.includes('timeout') || 
-                           e.includes('buffering') ||
-                           e.includes('Connection operation')
-                         );
+                         error.response?.data?.errors?.some((e: string) => e.includes('timeout'));
         
         if (!isTimeout) {
           throw error;

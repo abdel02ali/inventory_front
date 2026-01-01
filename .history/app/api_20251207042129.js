@@ -67,14 +67,15 @@ export const getProducts = async () => {
       request: error.request ? 'Request made but no response' : 'No request made'
     });
     
-    // Return empty array instead of undefined mockProducts
-    console.log('⚠️ Using empty data due to API error');
+    // Pour le développement, retourner des données mock en cas d'erreur
+    console.log('⚠️ Using mock data due to API error');
+    
     
     return {
       data: {
         success: true,
-        data: [],
-        total: 0
+        data: mockProducts,
+        total: mockProducts.length
       }
     };
   }
@@ -208,7 +209,18 @@ export const getCategories = async () => {
   } catch (error) {
     console.error('❌ Error fetching categories:', error.response?.data || error.message);
     
-   
+    if (error.response?.status === 404) {
+      const defaultCategories = [
+        { id: 'CAT000001', name: 'Bakery products', type: 'default', color: '#f59e0b', icon: '🍞' },
+        { id: 'CAT000002', name: 'Dairy', type: 'default', color: '#60a5fa', icon: '🥛' },
+        { id: 'CAT000003', name: 'Produce', type: 'default', color: '#22c55e', icon: '🥦' },
+        { id: 'CAT000004', name: 'Meat', type: 'default', color: '#ef4444', icon: '🥩' },
+        { id: 'CAT000005', name: 'Beverages', type: 'default', color: '#8b5cf6', icon: '🥤' },
+        { id: 'CAT000006', name: 'Dry Goods', type: 'default', color: '#d946ef', icon: '🫘' },
+        { id: 'CAT000007', name: 'Frozen', type: 'default', color: '#0ea5e9', icon: '❄️' }
+      ];
+      return defaultCategories;
+    }
     
     throw error;
   }

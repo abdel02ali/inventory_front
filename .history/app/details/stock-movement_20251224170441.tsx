@@ -293,7 +293,7 @@ export default function StockMovementScreen() {
       
       // Convert quantity to number for validation
       const cleanValue = product.quantity.replace(',', '.');
-      const quantityNum = parseFloat(cleanValue);
+      const quantityNum = Number(cleanValue);
       
       console.log(`🔍 Validating ${product.productName}:`);
       console.log(`   Input: "${product.quantity}" → Clean: "${cleanValue}" → Number: ${quantityNum}`);
@@ -301,8 +301,7 @@ export default function StockMovementScreen() {
       console.log(`   Is > 0: ${quantityNum > 0}`);
       console.log(`   Is valid: ${!isNaN(quantityNum) && quantityNum > 0}`);
       
-      // Allow decimal values like 0.5, 0.25, etc. (must be > 0)
-      return isNaN(quantityNum) || quantityNum <= 0 || !isFinite(quantityNum);
+      return isNaN(quantityNum) || quantityNum <= 0;
     });
 
     if (invalidProducts.length > 0) {

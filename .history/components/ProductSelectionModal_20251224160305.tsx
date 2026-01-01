@@ -320,6 +320,32 @@ export default function ProductSelectionModal({
     return { text: 'In stock', color: '#10b981', bgColor: isDarkMode ? '#064e3b' : '#d1fae5' };
   };
 
+  const getCategoryIcon = (category: string) => {
+    const iconMap: {[key: string]: string} = {
+      'Vegetables': '🥦',
+      'Fruits': '🍎',
+      'Meat': '🥩',
+      'Seafood': '🐟',
+      'Dairy': '🥛',
+      'Herbs & Spices': '🌿',
+      'Grains & Pasta': '🍚',
+      'Oils & Vinegars': '🫒',
+      'Canned Goods': '🥫',
+      'Bakery': '🍞',
+      'Beverages': '🥤',
+      'Cleaning Supplies': '🧽',
+      'Paper Goods': '🧻',
+      'Utensils': '🍴',
+      'Equipment': '🔪',
+      'Frozen Foods': '🧊',
+      'Condiments': '🧂',
+      'Spices': '🌶️',
+      'Baking Supplies': '🧁',
+      'Fresh Herbs': '🌱',
+      'Other': '📦',
+    };
+    return iconMap[category] || '📦';
+  };
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -336,11 +362,10 @@ export default function ProductSelectionModal({
   };
 
   // Calculate cache age
-  const getCacheAge = useCallback((): string => {
-    const lastFetch = cacheRef.current.lastFetchTime;
-    if (lastFetch === 0) return 'Never';
+  const getCacheAge = (): string => {
+    if (lastFetchTime === 0) return 'Never';
     
-    const ageMs = Date.now() - lastFetch;
+    const ageMs = Date.now() - lastFetchTime;
     const minutes = Math.floor(ageMs / 60000);
     
     if (minutes < 1) return 'Just now';
@@ -350,7 +375,7 @@ export default function ProductSelectionModal({
     const hours = Math.floor(minutes / 60);
     if (hours === 1) return '1 hour ago';
     return `${hours} hours ago`;
-  }, []);
+  };
 
   return (
     <Modal
@@ -394,7 +419,7 @@ export default function ProductSelectionModal({
                   </View>
                   <Text style={styles.headerSubtitle}>
                     {lastRefreshTime || 'Loading...'}
-                    {cacheRef.current.products.length > 0 && (
+                    {cachedProducts.length > 0 && (
                       <Text style={styles.cacheInfo}> • Cache: {getCacheAge()}</Text>
                     )}
                   </Text>
@@ -474,8 +499,8 @@ export default function ProductSelectionModal({
                               styles.categoryChip,
                               selectedCategory === category.id && styles.categoryChipSelected,
                               selectedCategory === category.id && { 
-                                backgroundColor: getCategoryColorForProduct(category.name),
-                                borderColor: getCategoryColorForProduct(category.name)
+                                backgroundColor: getCategoryColor(category.name),
+                                borderColor: getCategoryColor(category.name)
                               }
                             ]}
                             onPress={() => setSelectedCategory(category.id)}
@@ -516,11 +541,11 @@ export default function ProductSelectionModal({
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#6366f1" />
                     <Text style={styles.loadingText}>Loading products...</Text>
-                    {cacheRef.current.products.length > 0 && (
+                    {cachedProducts.length > 0 && (
                       <TouchableOpacity 
                         onPress={() => {
-                          setProducts(cacheRef.current.products);
-                          setCategories(cacheRef.current.categories);
+                          setProducts(cachedProducts);
+                          setCategories(cachedCategories);
                           setLoading(false);
                         }}
                         style={styles.useCacheButton}
@@ -550,7 +575,7 @@ export default function ProductSelectionModal({
                       const stockStatus = getStockStatus(currentStock);
                       const isDisabled = isSelected || (movementType === 'distribution' && currentStock === 0);
                       const primaryCategory = getPrimaryCategory(item);
-                      const categoryColor = getCategoryColorForProduct(primaryCategory);
+                      const categoryColor = getCategoryColor(primaryCategory);
                       const allCategories = getProductCategories(item);
                       
                       return (
@@ -589,7 +614,7 @@ export default function ProductSelectionModal({
                                   key={category} 
                                   style={[
                                     styles.categoryTag,
-                                    { backgroundColor: getCategoryColorForProduct(category) }
+                                    { backgroundColor: getCategoryColor(category) }
                                   ]}
                                 >
                                   <Text style={styles.categoryTagText}>

@@ -516,11 +516,11 @@ export default function ProductSelectionModal({
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#6366f1" />
                     <Text style={styles.loadingText}>Loading products...</Text>
-                    {cacheRef.current.products.length > 0 && (
+                    {cachedProducts.length > 0 && (
                       <TouchableOpacity 
                         onPress={() => {
-                          setProducts(cacheRef.current.products);
-                          setCategories(cacheRef.current.categories);
+                          setProducts(cachedProducts);
+                          setCategories(cachedCategories);
                           setLoading(false);
                         }}
                         style={styles.useCacheButton}
@@ -589,7 +589,7 @@ export default function ProductSelectionModal({
                                   key={category} 
                                   style={[
                                     styles.categoryTag,
-                                    { backgroundColor: getCategoryColorForProduct(category) }
+                                    { backgroundColor: getCategoryColor(category) }
                                   ]}
                                 >
                                   <Text style={styles.categoryTagText}>

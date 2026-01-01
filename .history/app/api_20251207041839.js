@@ -67,14 +67,47 @@ export const getProducts = async () => {
       request: error.request ? 'Request made but no response' : 'No request made'
     });
     
-    // Return empty array instead of undefined mockProducts
-    console.log('⚠️ Using empty data due to API error');
+    // Pour le développement, retourner des données mock en cas d'erreur
+    console.log('⚠️ Using mock data due to API error');
+    const mockProducts = [
+      {
+        id: 'PROD000001',
+        name: 'Organic Whole Milk',
+        description: 'Fresh organic whole milk, 1 gallon',
+        quantity: 50,
+        unit: 'bottles',
+        categories: ['CAT000002', 'CAT000007'],
+        primaryCategory: 'CAT000002',
+        departmentId: 'DEPT000001',
+        unitPrice: 3.50,
+        totalUsed: 0,
+        lastUsed: null,
+        imageUrl: 'https://example.com/images/milk.jpg',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'PROD000002', 
+        name: 'Whole Wheat Bread',
+        description: 'Freshly baked whole wheat bread',
+        quantity: 25,
+        unit: 'loaves',
+        categories: ['CAT000001'],
+        primaryCategory: 'CAT000001',
+        departmentId: 'DEPT000001',
+        unitPrice: 2.75,
+        totalUsed: 0,
+        lastUsed: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
     
     return {
       data: {
         success: true,
-        data: [],
-        total: 0
+        data: mockProducts,
+        total: mockProducts.length
       }
     };
   }
@@ -208,7 +241,18 @@ export const getCategories = async () => {
   } catch (error) {
     console.error('❌ Error fetching categories:', error.response?.data || error.message);
     
-   
+    if (error.response?.status === 404) {
+      const defaultCategories = [
+        { id: 'CAT000001', name: 'Bakery products', type: 'default', color: '#f59e0b', icon: '🍞' },
+        { id: 'CAT000002', name: 'Dairy', type: 'default', color: '#60a5fa', icon: '🥛' },
+        { id: 'CAT000003', name: 'Produce', type: 'default', color: '#22c55e', icon: '🥦' },
+        { id: 'CAT000004', name: 'Meat', type: 'default', color: '#ef4444', icon: '🥩' },
+        { id: 'CAT000005', name: 'Beverages', type: 'default', color: '#8b5cf6', icon: '🥤' },
+        { id: 'CAT000006', name: 'Dry Goods', type: 'default', color: '#d946ef', icon: '🫘' },
+        { id: 'CAT000007', name: 'Frozen', type: 'default', color: '#0ea5e9', icon: '❄️' }
+      ];
+      return defaultCategories;
+    }
     
     throw error;
   }

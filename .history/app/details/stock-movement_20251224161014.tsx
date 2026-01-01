@@ -66,7 +66,7 @@ export default function StockMovementScreen() {
   const [departments, setDepartments] = useState<ApiDepartment[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
 
-  const styles = getStyles(isDarkMode, movementType);
+  const styles = getStyles(isDarkMode);
 
   // Available products from context
   console.log('📦 App Context Products:', {
@@ -121,21 +121,11 @@ export default function StockMovementScreen() {
     const unitLower = unit.toLowerCase();
     
     if (decimalUnits.includes(unitLower)) {
-      // Allow decimals for these units (including 0.5, 0.25, etc.)
+      // Allow decimals for these units
       const normalizedValue = value.replace(',', '.');
-      // Improved regex: allows numbers like 0.5, 0.25, 1.5, etc.
-      // Pattern: optional digits, optional dot, at least one digit somewhere
-      const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+      const validDecimalRegex = /^\d*\.?\d*$/; // No negative numbers, allows decimals
       const decimalCount = (normalizedValue.match(/\./g) || []).length;
-      
-      // Check regex and decimal count
-      if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-        return false;
-      }
-      
-      // Additional check: ensure it's a valid number (not just ".")
-      const testNum = Number(normalizedValue);
-      return !isNaN(testNum) && isFinite(testNum);
+      return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
     } else if (integerUnits.includes(unitLower)) {
       // Only allow integers for these units
       const validIntegerRegex = /^\d+$/;
@@ -144,15 +134,9 @@ export default function StockMovementScreen() {
     
     // Default: allow decimals
     const normalizedValue = value.replace(',', '.');
-    const validDecimalRegex = /^(\d+\.?\d*|\.\d+)$/;
+    const validDecimalRegex = /^\d*\.?\d*$/;
     const decimalCount = (normalizedValue.match(/\./g) || []).length;
-    
-    if (!validDecimalRegex.test(normalizedValue) || decimalCount > 1) {
-      return false;
-    }
-    
-    const testNum = Number(normalizedValue);
-    return !isNaN(testNum) && isFinite(testNum);
+    return (validDecimalRegex.test(normalizedValue) && decimalCount <= 1);
   };
 
   // Update product function with decimal support
@@ -187,8 +171,11 @@ export default function StockMovementScreen() {
         
         // If this is a stock_in movement, pre-fill a default quantity
         if (movementType === 'stock_in' && !updated[index].quantity) {
-          // Set default quantity to 1 for all units
-          updated[index].quantity = '1';
+          // Set default quantity based on unit type
+          const unitLower = updated[index].unit.toLowerCase();
+          const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
+          const defaultQuantity = isDecimalUnit ? '0.5' : '1';
+          updated[index].quantity = defaultQuantity;
         }
       }
     }
@@ -218,8 +205,9 @@ export default function StockMovementScreen() {
   const selectProduct = (product: any) => {
     if (activeProductIndex !== null) {
       const updated = [...selectedProducts];
-      // Set default quantity to 1 for stock_in, empty for distribution
-      const defaultQuantity = movementType === 'stock_in' ? '1' : '';
+      const unitLower = String(product.unit || 'units').toLowerCase();
+      const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
+      const defaultQuantity = movementType === 'stock_in' ? (isDecimalUnit ? '0.5' : '1') : '';
       
       updated[activeProductIndex] = {
         productId: product.id,
@@ -293,7 +281,7 @@ export default function StockMovementScreen() {
       
       // Convert quantity to number for validation
       const cleanValue = product.quantity.replace(',', '.');
-      const quantityNum = parseFloat(cleanValue);
+      const quantityNum = Number(cleanValue);
       
       console.log(`🔍 Validating ${product.productName}:`);
       console.log(`   Input: "${product.quantity}" → Clean: "${cleanValue}" → Number: ${quantityNum}`);
@@ -301,8 +289,7 @@ export default function StockMovementScreen() {
       console.log(`   Is > 0: ${quantityNum > 0}`);
       console.log(`   Is valid: ${!isNaN(quantityNum) && quantityNum > 0}`);
       
-      // Allow decimal values like 0.5, 0.25, etc. (must be > 0)
-      return isNaN(quantityNum) || quantityNum <= 0 || !isFinite(quantityNum);
+      return isNaN(quantityNum) || quantityNum <= 0;
     });
 
     if (invalidProducts.length > 0) {
@@ -779,7 +766,7 @@ export default function StockMovementScreen() {
               {selectedProducts.map((product, index) => {
                 const unitLower = product.unit.toLowerCase();
                 const isDecimalUnit = ['kg', 'g', 'lb', 'oz', 'liter', 'l', 'lt'].includes(unitLower);
-                const placeholderText = isDecimalUnit ? "1" : "1";
+                const placeholderText = isDecimalUnit ? "0.5" : "1";
                 
                 return (
                 <View key={index} style={styles.productCard}>
@@ -861,119 +848,6 @@ export default function StockMovementScreen() {
               )}
             </View>
 
-            {/* Summary Section */}
-            {selectedProducts.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.summaryHeaderRow}>
-                    <Ionicons 
-                      name={movementType === 'stock_in' ? 'arrow-down-circle' : 'arrow-forward-circle'} 
-                      size={24} 
-                      color={movementType === 'stock_in' ? '#10b981' : '#6366f1'} 
-                    />
-                    <Text style={styles.sectionTitle}>
-                      {movementType === 'stock_in' ? 'Stock In' : 'Distribution'} Summary
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Movement Type Info */}
-                <View style={styles.summaryInfoCard}>
-                  <View style={styles.summaryInfoRow}>
-                    <Ionicons name="information-circle-outline" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
-                    <Text style={styles.summaryInfoLabel}>Type:</Text>
-                    <Text style={styles.summaryInfoValue}>
-                      {movementType === 'stock_in' ? '📥 Stock In' : '📤 Distribution'}
-                    </Text>
-                  </View>
-
-                  {movementType === 'stock_in' && supplier && (
-                    <View style={styles.summaryInfoRow}>
-                      <Ionicons name="storefront-outline" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
-                      <Text style={styles.summaryInfoLabel}>Supplier:</Text>
-                      <Text style={styles.summaryInfoValue}>{supplier}</Text>
-                    </View>
-                  )}
-
-                  {movementType === 'distribution' && selectedDepartment && (
-                    <View style={styles.summaryInfoRow}>
-                      <Ionicons name="business-outline" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
-                      <Text style={styles.summaryInfoLabel}>Department:</Text>
-                      <Text style={styles.summaryInfoValue}>{selectedDepartment.name}</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.summaryInfoRow}>
-                    <Ionicons name="cube-outline" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
-                    <Text style={styles.summaryInfoLabel}>Total Products:</Text>
-                    <Text style={[styles.summaryInfoValue, styles.summaryHighlight]}>
-                      {selectedProducts.length}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Products List */}
-                <View style={styles.summaryProductsContainer}>
-                  <Text style={styles.summaryProductsTitle}>Products:</Text>
-                  {selectedProducts.map((product, index) => {
-                    const quantity = product.quantity ? parseFloat(product.quantity.replace(',', '.')) : 0;
-                    const isValidQuantity = !isNaN(quantity) && quantity > 0;
-                    
-                    return (
-                      <View key={index} style={styles.summaryProductItem}>
-                        <View style={styles.summaryProductNumber}>
-                          <Text style={styles.summaryProductNumberText}>{index + 1}</Text>
-                        </View>
-                        <View style={styles.summaryProductDetails}>
-                          <Text style={styles.summaryProductName} numberOfLines={1}>
-                            {product.productName || 'Unnamed Product'}
-                          </Text>
-                          <View style={styles.summaryProductQuantity}>
-                            <Text style={styles.summaryProductQuantityText}>
-                              {isValidQuantity ? quantity : '0'} {product.unit || 'units'}
-                            </Text>
-                            {!isValidQuantity && (
-                              <Ionicons name="warning-outline" size={14} color="#ef4444" />
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                {/* Total Quantities Summary */}
-                <View style={styles.summaryTotalsCard}>
-                  <View style={styles.summaryTotalRow}>
-                    <Text style={styles.summaryTotalLabel}>Total Items:</Text>
-                    <Text style={styles.summaryTotalValue}>
-                      {selectedProducts.reduce((sum, p) => {
-                        const qty = p.quantity ? parseFloat(p.quantity.replace(',', '.')) : 0;
-                        return sum + (isNaN(qty) ? 0 : qty);
-                      }, 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryTotalRow}>
-                    <Text style={styles.summaryTotalLabel}>Products Count:</Text>
-                    <Text style={[styles.summaryTotalValue, styles.summaryHighlight]}>
-                      {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Notes Preview */}
-                {notes.trim() && (
-                  <View style={styles.summaryNotesCard}>
-                    <View style={styles.summaryInfoRow}>
-                      <Ionicons name="document-text-outline" size={18} color={isDarkMode ? "#94a3b8" : "#64748b"} />
-                      <Text style={styles.summaryInfoLabel}>Notes:</Text>
-                    </View>
-                    <Text style={styles.summaryNotesText}>{notes}</Text>
-                  </View>
-                )}
-              </View>
-            )}
-
             {/* Notes */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Notes (Optional)</Text>
@@ -1050,7 +924,7 @@ export default function StockMovementScreen() {
     </KeyboardAvoidingView>
   );
 }
-const getStyles = (isDarkMode: boolean, movementType: 'stock_in' | 'distribution') => StyleSheet.create({
+const getStyles = (isDarkMode: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: isDarkMode ? "#0f172a" : "#f8fafc",
@@ -1487,131 +1361,5 @@ const getStyles = (isDarkMode: boolean, movementType: 'stock_in' | 'distribution
     fontSize: 12,
     color: isDarkMode ? "#fbbf24" : "#92400e",
     lineHeight: 16,
-  },
-  summaryHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  summaryInfoCard: {
-    backgroundColor: isDarkMode ? "#334155" : "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: movementType === 'stock_in' ? '#10b981' : '#6366f1',
-  },
-  summaryInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  summaryInfoLabel: {
-    fontSize: 14,
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  summaryInfoValue: {
-    fontSize: 14,
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'right',
-  },
-  summaryHighlight: {
-    color: movementType === 'stock_in' ? '#10b981' : '#6366f1',
-    fontSize: 16,
-  },
-  summaryProductsContainer: {
-    backgroundColor: isDarkMode ? "#334155" : "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  summaryProductsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    marginBottom: 12,
-  },
-  summaryProductItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: isDarkMode ? "#475569" : "#e2e8f0",
-  },
-  summaryProductNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: movementType === 'stock_in' ? '#10b981' : '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  summaryProductNumberText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  summaryProductDetails: {
-    flex: 1,
-  },
-  summaryProductName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-    marginBottom: 4,
-  },
-  summaryProductQuantity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  summaryProductQuantityText: {
-    fontSize: 14,
-    color: isDarkMode ? "#94a3b8" : "#64748b",
-    fontWeight: '500',
-  },
-  summaryTotalsCard: {
-    backgroundColor: isDarkMode ? "#1e293b" : "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: movementType === 'stock_in' ? '#10b981' : '#6366f1',
-  },
-  summaryTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  summaryTotalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: isDarkMode ? "#cbd5e1" : "#475569",
-  },
-  summaryTotalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: isDarkMode ? "#f1f5f9" : "#1e293b",
-  },
-  summaryNotesCard: {
-    backgroundColor: isDarkMode ? "#334155" : "#f8fafc",
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: isDarkMode ? "#64748b" : "#94a3b8",
-  },
-  summaryNotesText: {
-    fontSize: 14,
-    color: isDarkMode ? "#cbd5e1" : "#475569",
-    marginTop: 8,
-    lineHeight: 20,
-    fontStyle: 'italic',
   },
 });
